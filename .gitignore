@@ -1,10 +1,9 @@
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Database files
+# DB files
 *.db
 *.sqlite3
 
@@ -13,4 +12,11 @@ __pycache__/
 
 # Session files
 sessions/
-*.pkl
+*.json
+
+# Uploads
+uploads/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
