@@ -96,6 +96,9 @@ class EitaaBot:
             code_input = self.page.locator(self.selectors['code_input'])
             code_input.fill(code)
 
+            # Take a screenshot right after entering the code to see the result
+            self.page.screenshot(path='login_attempt.png')
+
             self.page.wait_for_selector(self.selectors['search_box'], timeout=60000)
             
             self.is_logged_in = True
