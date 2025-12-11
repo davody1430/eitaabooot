@@ -45,73 +45,51 @@ async function createBot() {
 
 // شروع لاگین
 async function startLogin() {
-    if (!currentBotId) {
-        showNotification('لطفاً ابتدا یک ربات ایجاد کنید', 'warning');
-        return;
-    }
-    
     const phoneNumber = document.getElementById('phoneNumber').value.trim();
-    
-    // اعتبارسنجی شماره تلفن
     if (!phoneNumber.match(/^09\d{9}$/)) {
         showNotification('شماره تلفن باید با 09 شروع شود و 11 رقمی باشد', 'error');
         return;
     }
-    
+
+    document.getElementById('loginBtn').disabled = true;
+    document.getElementById('login-instructions').classList.remove('d-none');
+    addToLog('در حال ایجاد ربات و شروع فرآیند ورود...', 'info');
+
     try {
-        const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/login`, {
+        // Step 1: Create a new bot instance for this login attempt
+        const createResponse = await fetch(`${API_BASE_URL}/bot/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}) // Empty body is fine
+        });
+        const createData = await createResponse.json();
+        if (!createResponse.ok) {
+            throw new Error(createData.error || 'Failed to create bot');
+        }
+        currentBotId = createData.bot_id;
+
+        // Step 2: Start the long-polling login process
+        addToLog('ارسال شماره تلفن و باز کردن مرورگر در سرور...', 'info');
+        const loginResponse = await fetch(`${API_BASE_URL}/bot/${currentBotId}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phone_number: phoneNumber })
         });
         
-        const data = await response.json();
-        
-        if (response.ok) {
-            if (data.status === 'waiting') {
-                showNotification('مرورگر باز شد. لطفاً کد تأیید را وارد کنید', 'info');
-                document.getElementById('loginBtn').disabled = true;
-                document.getElementById('confirmBtn').disabled = false;
-                document.getElementById('loginStatus').innerHTML = 
-                    '<div class="alert alert-info">در انتظار تأیید لاگین در مرورگر...</div>';
-            } else {
-                showNotification('لاگین موفقیت‌آمیز بود', 'success');
-            }
+        const loginData = await loginResponse.json();
+        if (loginData.status === 'login_process_started') {
+            showNotification('فرآیند ورود آغاز شد. لطفاً به مرورگر باز شده در سرور توجه کنید.', 'info');
+            addToLog('سرور منتظر ورود دستی شما در مرورگر است. این فرآیند ممکن است تا ۵ دقیقه طول بکشد.', 'warning');
+            // Here you could start a poller to check if the login was successful
         } else {
-            showNotification(data.error || 'خطا در لاگین', 'error');
+            throw new Error(loginData.error || 'Failed to start login process');
         }
-    } catch (error) {
-        showNotification('خطا در ارتباط با سرور', 'error');
-        console.error(error);
-    }
-}
 
-// تأیید لاگین
-async function confirmLogin() {
-    if (!currentBotId) {
-        showNotification('ربات فعالی وجود ندارد', 'warning');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/confirm-login`, {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification('لاگین تأیید شد', 'success');
-            document.getElementById('confirmBtn').disabled = true;
-            document.getElementById('loginStatus').innerHTML = 
-                '<div class="alert alert-success">✅ لاگین تأیید شد. می‌توانید ارسال را شروع کنید.</div>';
-            document.getElementById('sendBtn').disabled = false;
-        } else {
-            showNotification(data.error || 'لاگین تأیید نشد', 'error');
-        }
     } catch (error) {
-        showNotification('خطا در تأیید لاگین', 'error');
-        console.error(error);
+        showNotification(`خطا: ${error.message}`, 'error');
+        addToLog(`خطا در فرآیند ورود: ${error.message}`, 'error');
+        document.getElementById('loginBtn').disabled = false;
+        document.getElementById('login-instructions').style.display = 'none';
     }
 }
 

@@ -317,16 +317,10 @@
                                     </button>
                                 </div>
 
-                                <div id="codeEntrySection" class="mt-4" style="display: none;">
-                                    <hr>
-                                    <h5>مرحله ۲: ورود کد تایید</h5>
-                                    <p>کد ارسال شده به ایتا را وارد کنید.</p>
-                                    <div class="input-group">
-                                        <input type="text" id="verificationCode" class="form-control" placeholder="کد تایید">
-                                        <button id="submitCodeBtn" class="btn btn-success" onclick="submitCode()">
-                                            <i class="fas fa-check"></i> ثبت کد
-                                        </button>
-                                    </div>
+                                <div id="login-instructions" class="alert alert-info mt-3 d-none">
+                                    <h5 class="alert-heading">لطفاً صبر کنید...</h5>
+                                    <p>یک پنجره مرورگر در سرور باز شده است. لطفاً مراحل ورود را به صورت دستی در آن پنجره تکمیل کنید (کد تأیید را وارد کنید).</p>
+                                    <p class="mb-0">این برنامه پس از تشخیص ورود موفق، به شما اطلاع خواهد داد.</p>
                                 </div>
                                 
                                 <div id="loginStatus" class="mt-3"></div>
@@ -738,18 +732,13 @@
                 });
 
                 const data = await response.json();
-                if (data.status === 'waiting_for_code') {
-                    showNotification('کد تایید ارسال شد. لطفاً آن را وارد کنید.', 'info');
-                    document.getElementById('codeEntrySection').style.display = 'block';
-                    document.getElementById('loginStatus').innerHTML =
-                        '<div class="alert alert-info mt-3">در انتظار ورود کد تایید...</div>';
-                    addToLog('منتظر ورود کد تایید توسط کاربر.', 'info');
-                } else if (data.status === 'success') {
-                    showNotification('شما از قبل لاگین هستید.', 'success');
-                    document.getElementById('loginBtn').disabled = true;
-                    addToLog('نشست قبلی معتبر است. لاگین انجام شد.', 'success');
+                if (data.status === 'login_process_started') {
+                    document.getElementById('login-instructions').classList.remove('d-none');
+                    showNotification('فرآیند لاگین شروع شد. لطفاً در مرورگری که باز می‌شود ادامه دهید.', 'info');
+                    addToLog('منتظر تکمیل لاگین دستی توسط کاربر در مرورگر سرور.', 'info');
                 } else {
                     showNotification(data.error || 'خطا در شروع فرآیند لاگین', 'error');
+                    addToLog(`خطا در شروع لاگین: ${data.error || 'نامشخص'}`, 'error');
                     document.getElementById('loginBtn').disabled = false;
                 }
             } catch (error) {
