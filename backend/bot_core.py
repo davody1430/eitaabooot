@@ -31,10 +31,13 @@ class EitaaBot:
         self.max_delay = max_delay
         self.session_file = session_file
         self.headless = headless
-        self.playwright = None
-        self.browser = None
-        self.context = None
-        self.page = None
+
+        self.playwright = sync_playwright().start()
+        self.browser = self.playwright.chromium.launch(headless=self.headless)
+
+        storage_state = self.session_file if os.path.exists(self.session_file) else None
+        self.context = self.browser.new_context(storage_state=storage_state)
+        self.page = self.context.new_page()
         self.is_logged_in = False
         
         self.selectors = {
@@ -54,13 +57,6 @@ class EitaaBot:
 
     def login(self, phone_number=None):
         try:
-            self.playwright = sync_playwright().start()
-            self.browser = self.playwright.chromium.launch(headless=self.headless)
-            
-            storage_state = self.session_file if os.path.exists(self.session_file) else None
-            self.context = self.browser.new_context(storage_state=storage_state)
-            self.page = self.context.new_page()
-
             self.page.goto(self.selectors['login_page'], timeout=60000)
 
             try:
@@ -138,6 +134,8 @@ class EitaaBot:
             return False
             
     def close(self):
+        if self.context:
+            self.context.close()
         if self.browser:
             self.browser.close()
         if self.playwright:
