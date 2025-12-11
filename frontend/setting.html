@@ -1,0 +1,40 @@
+<div class="settings-page">
+    <h2>⚙️ تنظیمات ارسال</h2>
+    
+    <!-- اسلایدرهای لمسی -->
+    <div class="slider-group">
+        <label>فاصله بین پیام‌ها:</label>
+        <div class="range-slider">
+            <span>حداقل: <span id="minDelayValue">2.0</span> ثانیه</span>
+            <input type="range" min="1" max="10" step="0.5" value="2" 
+                   oninput="updateMinDelay(this.value)">
+        </div>
+        <div class="range-slider">
+            <span>حداکثر: <span id="maxDelayValue">5.0</span> ثانیه</span>
+            <input type="range" min="1" max="10" step="0.5" value="5"
+                   oninput="updateMaxDelay(this.value)">
+        </div>
+    </div>
+    
+    <!-- ویرایشگر متن پیام -->
+    <div class="card">
+        <h3>📝 متن پیام</h3>
+        <textarea id="messageText" rows="5">
+سلام [نام] عزیز،
+این پیام از طرف [سازمان] است.
+با تشکر
+        </textarea>
+        <div class="message-preview">
+            <h4>📱 پیش‌نمایش در ایتا:</h4>
+            <div class="eitaa-preview">
+                <!-- شبیه‌سازی ظاهر پیام در ایتا -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- ذخیره خودکار -->
+    <div class="auto-save">
+        <label>💾 ذخیره خودکار تنظیمات</label>
+        <input type="checkbox" checked>
+    </div>
+</div>

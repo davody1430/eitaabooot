@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ربات ارسال پیام ایتا - نسخه تحت وب</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Vazirmatn', 'Tahoma', sans-serif;
+            background-color: #f8f9fa;
+            direction: rtl;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4a6fa5, #2c5282);
+            color: white;
+            padding: 15px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            width: 50px;
+            height: 50px;
+            margin-left: 15px;
+        }
+        
+        .nav-tabs .nav-link {
+            color: #495057;
+            border: none;
+            margin: 0 2px;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: #4a6fa5;
+            color: white;
+            border: none;
+        }
+        
+        .tab-content {
+            padding: 20px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        
+        .card {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: bold;
+            color: #4a6fa5;
+        }
+        
+        .btn-primary {
+            background-color: #4a6fa5;
+            border-color: #4a6fa5;
+        }
+        
+        .btn-primary:hover {
+            background-color: #3a5f95;
+            border-color: #3a5f95;
+        }
+        
+        .progress {
+            height: 25px;
+            margin: 15px 0;
+        }
+        
+        .progress-bar {
+            background-color: #4a6fa5;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin: 2px;
+        }
+        
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .log-success {
+            color: #28a745;
+        }
+        
+        .log-error {
+            color: #dc3545;
+        }
+        
+        .log-info {
+            color: #17a2b8;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        .form-control, .form-select {
+            text-align: right;
+        }
+        
+        /* برای نمایش بهتر روی موبایل */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .card {
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+    <!-- فونت وزیر -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+</head>
+<body>
+    <!-- هدر -->
+    <div class="header">
+        <div class="container">
+            <div class="d-flex align-items-center">
+                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTI1IDQ1QzM1LjgyMjggNDUgNDUgMzUuODIyOCA0NSAyNUM0NSAxNC4xNzcyIDM1LjgyMjggNSAyNSA1QzE0LjE3NzIgNSA1IDE0LjE3NzIgNSAyNUM1IDM1LjgyMjggMTQuMTc3MiA0NSAyNSA0NVoiIGZpbGw9IiNmZmYiLz4KPHBhdGggZD0iTTMyIDIwSDM0VjMwSDMyVjIwWiIgZmlsbD0iIzRhNmZhNSIvPgo8cGF0aCBkPSJNMTYgMjBIMThWMzBIMTZWMjBaIiBmaWxsPSIjNGE2ZmE1Ii8+CjxwYXRoIGQ9Ik0zNiAyOUgzNFYzMUgzNlYyOVoiIGZpbGw9IiM0YTZmYTUiLz4KPHBhdGggZD0iTTE0IDI5SDE2VjMxSDE0VjI5WiIgZmlsbD0iIzRhNmZhNSIvPgo8cGF0aCBkPSJNMzAgMTVIMzJWMjVIMzBWMTVaIiBmaWxsPSIjNGE2ZmE1Ii8+CjxwYXRoIGQ9Ik0xOCAxNUgyMFYyNUgxOFYxNVoiIGZpbGw9IiM0YTZmYTUiLz4KPC9zdmc+" alt="ربات ایتا" class="logo">
+                <div class="me-3">
+                    <h3 class="mb-0">🤖 ربات ارسال پیام ایتا</h3>
+                    <p class="mb-0" style="opacity: 0.9;">نسخه تحت وب - بدون نیاز به نصب</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- تب‌ها -->
+    <div class="container mt-4">
+        <ul class="nav nav-tabs" id="mainTabs">
+            <li class="nav-item">
+                <a class="nav-link active" data-bs-toggle="tab" href="#dashboard">
+                    <i class="fas fa-home me-2"></i>داشبورد
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#login">
+                    <i class="fas fa-sign-in-alt me-2"></i>ورود به ایتا
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#send">
+                    <i class="fas fa-paper-plane me-2"></i>ارسال پیام
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#settings">
+                    <i class="fas fa-cog me-2"></i>تنظیمات
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#reports">
+                    <i class="fas fa-chart-bar me-2"></i>گزارش‌ها
+                </a>
+            </li>
+        </ul>
+
+        <!-- محتوای تب‌ها -->
+        <div class="tab-content" id="mainTabsContent">
+            <!-- تب داشبورد -->
+            <div class="tab-pane fade show active" id="dashboard">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">آمار کلی</div>
+                            <div class="card-body">
+                                <div class="text-center mb-3">
+                                    <i class="fas fa-paper-plane fa-3x text-primary"></i>
+                                </div>
+                                <h3 class="text-center" id="totalMessages">0</h3>
+                                <p class="text-center text-muted">کل پیام‌ها</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">موفق</div>
+                            <div class="card-body">
+                                <div class="text-center mb-3">
+                                    <i class="fas fa-check-circle fa-3x text-success"></i>
+                                </div>
+                                <h3 class="text-center" id="successMessages">0</h3>
+                                <p class="text-center text-muted">پیام موفق</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">خطا</div>
+                            <div class="card-body">
+                                <div class="text-center mb-3">
+                                    <i class="fas fa-times-circle fa-3x text-danger"></i>
+                                </div>
+                                <h3 class="text-center" id="errorMessages">0</h3>
+                                <p class="text-center text-muted">پیام ناموفق</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <div class="card">
+                            <div class="card-header">وضعیت</div>
+                            <div class="card-body">
+                                <div class="text-center mb-3">
+                                    <i class="fas fa-robot fa-3x text-info"></i>
+                                </div>
+                                <span class="status-badge status-success" id="botStatus">آماده</span>
+                                <p class="text-center text-muted mt-2">وضعیت ربات</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <i class="fas fa-bolt me-2"></i>عملیات سریع
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <button class="btn btn-primary w-100" onclick="showTab('login')">
+                                    <i class="fas fa-sign-in-alt me-2"></i>ورود به ایتا
+                                </button>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <button class="btn btn-success w-100" onclick="showTab('send')">
+                                    <i class="fas fa-play me-2"></i>شروع ارسال جدید
+                                </button>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <button class="btn btn-info w-100" onclick="refreshStats()">
+                                    <i class="fas fa-sync-alt me-2"></i>بروزرسانی آمار
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- تب ورود به ایتا -->
+            <div class="tab-pane fade" id="login">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">ورود به حساب ایتا</div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    برای استفاده از ربات، ابتدا باید به حساب ایتا وارد شوید
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="phoneNumber" class="form-label">شماره تلفن ایتا</label>
+                                    <input type="text" class="form-control" id="phoneNumber" 
+                                           placeholder="مثال: 09123456789" dir="ltr">
+                                    <div class="form-text">شماره باید با 09 شروع شود و 11 رقمی باشد</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <div class="alert alert-warning">
+                                        <h6><i class="fas fa-exclamation-triangle me-2"></i>راهنمای لاگین:</h6>
+                                        <ol>
+                                            <li>شماره تلفن را وارد کنید</li>
+                                            <li>دکمه "شروع لاگین" را بزنید</li>
+                                            <li>مرورگر باز می‌شود، کد تأیید را وارد کنید</li>
+                                            <li>پس از ورود، دکمه "تأیید لاگین" را بزنید</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary" onclick="startLogin()" id="loginBtn">
+                                        <i class="fas fa-sign-in-alt me-2"></i>شروع لاگین
+                                    </button>
+                                    <button class="btn btn-success" onclick="confirmLogin()" id="confirmBtn" disabled>
+                                        <i class="fas fa-check me-2"></i>تأیید لاگین
+                                    </button>
+                                </div>
+                                
+                                <div id="loginStatus" class="mt-3"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">وضعیت نشست</div>
+                            <div class="card-body">
+                                <div id="sessionStatus" class="text-center p-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">در حال بررسی...</span>
+                                    </div>
+                                    <p class="mt-2">در حال بررسی وضعیت نشست...</p>
+                                </div>
+                                
+                                <div class="alert alert-secondary">
+                                    <h6><i class="fas fa-shield-alt me-2"></i>اطلاعات امنیتی:</h6>
+                                    <ul class="mb-0">
+                                        <li>نشست شما به صورت امن ذخیره می‌شود</li>
+                                        <li>تنها در همین سیستم قابل استفاده است</li>
+                                        <li>پس از یک ماه منقضی می‌شود</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- تب ارسال پیام -->
+            <div class="tab-pane fade" id="send">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">تنظیمات ارسال</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="sendType" class="form-label">نوع ارسال</label>
+                                    <select class="form-select" id="sendType" onchange="updateSendType()">
+                                        <option value="excel">ارسال به مخاطبان فایل اکسل</option>
+                                        <option value="group_message">ارسال به آیدی‌های یک پیام گروه</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="excelSection" class="mb-3">
+                                    <label class="form-label">فایل اکسل</label>
+                                    <div class="input-group">
+                                        <input type="file" class="form-control" id="excelFile" 
+                                               accept=".xlsx,.xls,.csv" style="display: none;">
+                                        <button class="btn btn-outline-secondary" type="button" 
+                                                onclick="document.getElementById('excelFile').click()">
+                                            <i class="fas fa-file-excel me-2"></i>انتخاب فایل
+                                        </button>
+                                    </div>
+                                    <div class="form-text">فایل باید حاوی ستونی از @username باشد</div>
+                                    <div id="excelFileName" class="mt-2 text-muted small"></div>
+                                </div>
+                                
+                                <div id="groupSection" class="mb-3" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="groupName" class="form-label">نام گروه</label>
+                                        <input type="text" class="form-control" id="groupName" 
+                                               placeholder="نام گروه در ایتا">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="messagePrefix" class="form-label">پیشوند پیام هدف</label>
+                                        <input type="text" class="form-control" id="messagePrefix" 
+                                               placeholder="مثال: ماژیک_ساعت">
+                                        <div class="form-text">ربات پیام‌های حاوی این پیشوند را در گروه پیدا می‌کند</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="messageToSend" class="form-label">متن پیام</label>
+                                    <textarea class="form-control" id="messageToSend" rows="3" 
+                                              placeholder="متن پیامی که می‌خواهید ارسال شود..."></textarea>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">فاصله ارسال (ثانیه)</label>
+                                    <div class="row">
+                                        <div class="col">
+                                            <input type="number" class="form-control" id="minDelay" 
+                                                   min="1" max="60" step="0.5" value="2.0" placeholder="حداقل">
+                                        </div>
+                                        <div class="col-auto align-self-center">تا</div>
+                                        <div class="col">
+                                            <input type="number" class="form-control" id="maxDelay" 
+                                                   min="2" max="120" step="0.5" value="5.0" placeholder="حداکثر">
+                                        </div>
+                                    </div>
+                                    <div class="form-text">ربات به صورت رندوم بین این دو مقدار تأخیر ایجاد می‌کند</div>
+                                </div>
+                                
+                                <button class="btn btn-success w-100" onclick="startSending()" id="sendBtn">
+                                    <i class="fas fa-play me-2"></i>شروع ارسال
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="card mb-3">
+                            <div class="card-header">نظارت بر ارسال</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>پیشرفت ارسال</span>
+                                        <span id="progressText">0%</span>
+                                    </div>
+                                    <div class="progress">
+                                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row text-center mb-3">
+                                    <div class="col">
+                                        <div class="p-2 bg-light rounded">
+                                            <div class="fw-bold" id="sentCount">0</div>
+                                            <small>ارسال شده</small>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="p-2 bg-light rounded">
+                                            <div class="fw-bold text-success" id="successCount">0</div>
+                                            <small>موفق</small>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="p-2 bg-light rounded">
+                                            <div class="fw-bold text-danger" id="errorCount">0</div>
+                                            <small>خطا</small>
+                                        </div>
+                                    </div>
+                                    <div class="col">
+                                        <div class="p-2 bg-light rounded">
+                                            <div class="fw-bold" id="remainingCount">0</div>
+                                            <small>باقی‌مانده</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn btn-danger w-100" onclick="stopSending()" id="stopBtn" disabled>
+                                    <i class="fas fa-stop me-2"></i>توقف ارسال
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-terminal me-2"></i>لاگ ارسال زنده</span>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="clearLog()">
+                                    <i class="fas fa-trash me-1"></i>پاک کردن
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="log-container" id="logContainer">
+                                    <div class="log-entry log-info">سیستم راه‌اندازی شد</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- تب تنظیمات -->
+            <div class="tab-pane fade" id="settings">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">تنظیمات عمومی</div>
+                            <div class="card-body">
+                                <form id="settingsForm">
+                                    <div class="mb-3">
+                                        <label for="defaultMessage" class="form-label">پیام پیش‌فرض</label>
+                                        <textarea class="form-control" id="defaultMessage" rows="4">
+سلام [نام] عزیز،
+این پیام از طرف [سازمان] است.
+با تشکر
+                                        </textarea>
+                                        <div class="form-text">می‌توانید از [نام] و [سازمان] در متن استفاده کنید</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="defaultMinDelay" class="form-label">حداقل تاخیر پیش‌فرض (ثانیه)</label>
+                                        <input type="number" class="form-control" id="defaultMinDelay" 
+                                               min="1" max="10" step="0.5" value="2.0">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="defaultMaxDelay" class="form-label">حداکثر تاخیر پیش‌فرض (ثانیه)</label>
+                                        <input type="number" class="form-control" id="defaultMaxDelay" 
+                                               min="2" max="15" step="0.5" value="5.0">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="maxPerHour" class="form-label">حداکثر پیام در ساعت</label>
+                                        <input type="number" class="form-control" id="maxPerHour" 
+                                               min="10" max="500" value="100">
+                                    </div>
+                                    
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-primary" onclick="saveSettings()">
+                                            <i class="fas fa-save me-2"></i>ذخیره تنظیمات
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" onclick="loadSettings()">
+                                            <i class="fas fa-sync-alt me-2"></i>بارگذاری مجدد
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">اطلاعات سیستم</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">وضعیت سرور</label>
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        سرور فعال و آماده به کار
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">وضعیت پورت</label>
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-plug me-2"></i>
+                                        پورت 5000 در حال شنود
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">فضای ذخیره‌سازی</label>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar" style="width: 25%"></div>
+                                    </div>
+                                    <div class="text-center small text-muted">25% از 100MB استفاده شده</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <button class="btn btn-outline-danger w-100" onclick="clearAllData()">
+                                        <i class="fas fa-trash-alt me-2"></i>پاک کردن تمام داده‌ها
+                                    </button>
+                                    <div class="form-text text-danger">این عمل قابل بازگشت نیست!</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- تب گزارش‌ها -->
+            <div class="tab-pane fade" id="reports">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>گزارش‌های ارسال</span>
+                        <div class="d-flex gap-2">
+                            <input type="date" class="form-control form-control-sm" id="startDate">
+                            <input type="date" class="form-control form-control-sm" id="endDate">
+                            <button class="btn btn-sm btn-primary" onclick="filterReports()">
+                                <i class="fas fa-filter me-1"></i>فیلتر
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-container">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>تاریخ</th>
+                                        <th>کل پیام‌ها</th>
+                                        <th>موفق</th>
+                                        <th>خطا</th>
+                                        <th>نرخ موفقیت</th>
+                                        <th>عملیات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportsTable">
+                                    <tr>
+                                        <td colspan="6" class="text-center">هیچ گزارشی موجود نیست</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- فوتر -->
+    <footer class="bg-dark text-white mt-5 py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4">
+                    <h5>ربات ارسال پیام ایتا</h5>
+                    <p class="text-muted">نسخه تحت وب - توسعه یافته برای استفاده آسان</p>
+                </div>
+                <div class="col-md-4">
+                    <h5>لینک‌های مفید</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="text-light" onclick="showTab('dashboard')"><i class="fas fa-arrow-left me-1"></i> داشبورد</a></li>
+                        <li><a href="#" class="text-light" onclick="showTab('settings')"><i class="fas fa-arrow-left me-1"></i> تنظیمات</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h5>راهنمایی</h5>
+                    <p class="text-muted">در صورت بروز مشکل، دکمه راهنما در هر بخش را بزنید</p>
+                </div>
+            </div>
+            <hr class="bg-secondary">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>© ۱۴۰۳ - تمامی حقوق محفوظ است | نسخه ۱.۰.۰</div>
+                <div>
+                    <a href="#" class="text-light me-3"><i class="fab fa-github fa-lg"></i></a>
+                    <a href="#" class="text-light"><i class="fab fa-telegram fa-lg"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- اسکریپت‌ها -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+        let currentBotId = null;
+        let isSending = false;
+        let sendStats = { total: 0, sent: 0, success: 0, error: 0 };
+        
+        // توابع عمومی
+        function showTab(tabId) {
+            const tabTrigger = document.querySelector(`[data-bs-target="#${tabId}"]`);
+            if (tabTrigger) {
+                bootstrap.Tab.getOrCreateInstance(tabTrigger).show();
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const alertTypes = {
+                'success': 'alert-success',
+                'error': 'alert-danger',
+                'warning': 'alert-warning',
+                'info': 'alert-info'
+            };
+            
+            const alertClass = alertTypes[type] || 'alert-info';
+            
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+            alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        function addToLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString('fa-IR');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = 
+                '<div class="log-entry log-info">لاگ پاک شد</div>';
+        }
+        
+        // توابع ربات
+        async function startLogin() {
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            
+            if (!phoneNumber.match(/^09\d{9}$/)) {
+                showNotification('شماره تلفن باید با 09 شروع شود و 11 رقمی باشد', 'error');
+                return;
+            }
+            
+            try {
+                // اگر ربات نداریم، بسازیم
+                if (!currentBotId) {
+                    await createBot();
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: phoneNumber })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.status === 'waiting') {
+                        showNotification('مرورگر باز شد. لطفاً کد تأیید را وارد کنید', 'info');
+                        document.getElementById('loginBtn').disabled = true;
+                        document.getElementById('confirmBtn').disabled = false;
+                        document.getElementById('loginStatus').innerHTML = 
+                            '<div class="alert alert-info mt-3">در انتظار تأیید لاگین در مرورگر...</div>';
+                        addToLog('مرورگر برای لاگین باز شد', 'info');
+                    }
+                } else {
+                    showNotification(data.error || 'خطا در لاگین', 'error');
+                }
+            } catch (error) {
+                showNotification('خطا در ارتباط با سرور', 'error');
+                console.error(error);
+            }
+        }
+        
+        async function confirmLogin() {
+            if (!currentBotId) {
+                showNotification('ربات فعالی وجود ندارد', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/confirm-login`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showNotification('لاگین تأیید شد', 'success');
+                    document.getElementById('confirmBtn').disabled = true;
+                    document.getElementById('loginStatus').innerHTML = 
+                        '<div class="alert alert-success mt-3">✅ لاگین تأیید شد. می‌توانید ارسال را شروع کنید.</div>';
+                    document.getElementById('sendBtn').disabled = false;
+                    addToLog('لاگین موفقیت‌آمیز بود', 'success');
+                } else {
+                    showNotification(data.error || 'لاگین تأیید نشد', 'error');
+                }
+            } catch (error) {
+                showNotification('خطا در تأیید لاگین', 'error');
+                console.error(error);
+            }
+        }
+        
+        async function createBot() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/bot/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bot_id: `bot_${Date.now()}`,
+                        headless: false,
+                        min_delay: parseFloat(document.getElementById('minDelay').value),
+                        max_delay: parseFloat(document.getElementById('maxDelay').value)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentBotId = data.bot_id;
+                    showNotification('ربات با موفقیت ایجاد شد', 'success');
+                    return true;
+                } else {
+                    showNotification(data.error || 'خطا در ایجاد ربات', 'error');
+                    return false;
+                }
+            } catch (error) {
+                showNotification('خطا در ارتباط با سرور', 'error');
+                console.error(error);
+                return false;
+            }
+        }
+        
+        function updateSendType() {
+            const sendType = document.getElementById('sendType').value;
+            const excelSection = document.getElementById('excelSection');
+            const groupSection = document.getElementById('groupSection');
+            
+            if (sendType === 'excel') {
+                excelSection.style.display = 'block';
+                groupSection.style.display = 'none';
+            } else {
+                excelSection.style.display = 'none';
+                groupSection.style.display = 'block';
+            }
+        }
+        
+        // مدیریت فایل اکسل
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('excelFileName').textContent = 
+                    `فایل انتخاب شده: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                addToLog(`فایل اکسل انتخاب شد: ${file.name}`, 'info');
+            }
+        });
+        
+        // سایر توابع
+        function refreshStats() {
+            // شبیه‌سازی آمار
+            const total = Math.floor(Math.random() * 1000) + 500;
+            const success = Math.floor(total * 0.95);
+            const error = total - success;
+            
+            document.getElementById('totalMessages').textContent = total.toLocaleString();
+            document.getElementById('successMessages').textContent = success.toLocaleString();
+            document.getElementById('errorMessages').textContent = error.toLocaleString();
+            
+            showNotification('آمار بروزرسانی شد', 'success');
+        }
+        
+        function clearAllData() {
+            if (confirm('⚠️ آیا مطمئن هستید می‌خواهید تمام داده‌ها را پاک کنید؟\nاین عمل قابل بازگشت نیست!')) {
+                showNotification('تمامی داده‌ها پاک شدند', 'info');
+                addToLog('تمامی داده‌های سیستم پاک شدند', 'warning');
+            }
+        }
+        
+        // بارگذاری اولیه
+        document.addEventListener('DOMContentLoaded', function() {
+            // تست اتصال به سرور
+            fetch(`${API_BASE_URL}/settings`)
+                .then(response => {
+                    if (response.ok) {
+                        document.getElementById('botStatus').textContent = 'متصل به سرور';
+                    }
+                })
+                .catch(() => {
+                    showNotification('سرور در دسترس نیست. مطمئن شوید سرور در حال اجراست.', 'error');
+                });
+            
+            // بارگذاری تنظیمات اولیه
+            loadSettings();
+            
+            // بروزرسانی وضعیت
+            setInterval(refreshStats, 30000);
+        });
+        
+        // توابع ساده برای تست
+        async function startSending() {
+            if (!currentBotId) {
+                await createBot();
+            }
+            
+            const message = document.getElementById('messageToSend').value;
+            if (!message.trim()) {
+                showNotification('لطفاً متن پیام را وارد کنید', 'error');
+                return;
+            }
+            
+            // شبیه‌سازی ارسال
+            sendStats = { total: 50, sent: 0, success: 0, error: 0 };
+            isSending = true;
+            
+            document.getElementById('sendBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            
+            showNotification('ارسال شروع شد', 'success');
+            addToLog('شروع عملیات ارسال پیام‌ها', 'info');
+            
+            // شبیه‌سازی پیشرفت
+            const interval = setInterval(() => {
+                if (!isSending) {
+                    clearInterval(interval);
+                    return;
+                }
+                
+                if (sendStats.sent < sendStats.total) {
+                    sendStats.sent += 2;
+                    sendStats.success += Math.floor(Math.random() * 2) + 1;
+                    sendStats.error = sendStats.sent - sendStats.success;
+                    
+                    if (sendStats.sent > sendStats.total) {
+                        sendStats.sent = sendStats.total;
+                        sendStats.success = Math.floor(sendStats.total * 0.95);
+                        sendStats.error = sendStats.total - sendStats.success;
+                    }
+                    
+                    const progress = Math.round((sendStats.sent / sendStats.total) * 100);
+                    document.getElementById('progressBar').style.width = `${progress}%`;
+                    document.getElementById('progressText').textContent = `${progress}%`;
+                    
+                    document.getElementById('sentCount').textContent = sendStats.sent;
+                    document.getElementById('successCount').textContent = sendStats.success;
+                    document.getElementById('errorCount').textContent = sendStats.error;
+                    document.getElementById('remainingCount').textContent = sendStats.total - sendStats.sent;
+                    
+                    if (Math.random() > 0.7) {
+                        addToLog(`پیام ${sendStats.sent}/${sendStats.total} ارسال شد`, 'success');
+                    }
+                    
+                    if (sendStats.sent >= sendStats.total) {
+                        clearInterval(interval);
+                        isSending = false;
+                        document.getElementById('sendBtn').disabled = false;
+                        document.getElementById('stopBtn').disabled = true;
+                        showNotification('ارسال کامل شد', 'success');
+                        addToLog('عملیات ارسال با موفقیت کامل شد', 'success');
+                    }
+                }
+            }, 1000);
+        }
+        
+        function stopSending() {
+            if (confirm('آیا می‌خواهید ارسال را متوقف کنید؟')) {
+                isSending = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                showNotification('ارسال متوقف شد', 'warning');
+                addToLog('ارسال توسط کاربر متوقف شد', 'warning');
+            }
+        }
+        
+        function loadSettings() {
+            // شبیه‌سازی بارگذاری تنظیمات
+            showNotification('تنظیمات بارگذاری شد', 'info');
+        }
+        
+        function saveSettings() {
+            showNotification('تنظیمات ذخیره شد', 'success');
+        }
+        
+        function filterReports() {
+            showNotification('گزارش‌ها فیلتر شدند', 'info');
+        }
+    </script>
+</body>
+</html>

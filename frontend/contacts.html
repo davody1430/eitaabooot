@@ -1,0 +1,27 @@
+<div class="contacts-page">
+    <h2>👥 مدیریت مخاطبان</h2>
+    
+    <!-- آپلود فایل اکسل -->
+    <div class="card">
+        <h3>📁 آپلود فایل اکسل</h3>
+        <input type="file" accept=".xlsx,.xls,.csv" id="excelFile">
+        <div class="preview-table">
+            <!-- پیش‌نمایش داده‌های اکسل -->
+        </div>
+    </div>
+    
+    <!-- درگ و دراپ -->
+    <div class="drop-zone" ondragover="dragOver(event)" ondrop="dropFile(event)">
+        فایل اکسل را اینجا رها کنید
+    </div>
+    
+    <!-- مخاطبان استخراج شده -->
+    <div class="card">
+        <h3>📋 لیست مخاطبان (۱۵۰ نفر)</h3>
+        <table>
+            <tr><th>ردیف</th><th>آیدی</th><th>منبع</th><th>عملیات</th></tr>
+            <tr><td>۱</td><td>@user001</td><td>Excel</td><td>🗑️</td></tr>
+            <tr><td>۲</td><td>@user002</td><td>Group</td><td>🗑️</td></tr>
+        </table>
+    </div>
+</div>
