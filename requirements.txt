@@ -1,8 +1,8 @@
 Flask==2.3.3
 Flask-CORS==4.0.0
-selenium==4.13.0
-pandas==2.1.1
+pandas==2.2.2
+numpy==1.26.4
 openpyxl==3.1.2
-webdriver-manager==3.9.1
 Werkzeug==2.3.7
 unicodedata2==15.1.0
+playwright

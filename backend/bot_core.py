@@ -1,28 +1,19 @@
-# backend/bot_core.py - نسخه کامل با المنت‌های واقعی ایتا
-import pickle
+# backend/bot_core.py - نسخه نهایی با Playwright و Pandas
 import os
-import time
 import random
 import re
-import pandas as pd
+import time
+import json
 import unicodedata
-from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import pandas as pd
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-# توابع کمکی از کد فعلی
+# توابع کمکی
 def normalize_persian_text(text):
-    if text is None:
-        return None
-    # تبدیل کاراکترهای رایج عربی به معادل فارسی قبل از نرمال‌سازی کلی
-    text = text.replace('\u064A', '\u06CC').replace('\u0649', '\u06CC')  # ی عربی (ي, ى) به ی فارسی (ی)
-    text = text.replace('\u0643', '\u06A9')  # ک عربی (ك) به ک فارسی (ک)
-    text = text.replace('\u0629', '\u0647')  # ة عربی به ه فارسی
-    # نرمال‌سازی با NFKC برای یکسان‌سازی سایر کاراکترهای سازگار و ترکیبی
+    if text is None: return None
+    text = text.replace('\u064A', '\u06CC').replace('\u0649', '\u06CC')
+    text = text.replace('\u0643', '\u06A9')
+    text = text.replace('\u0629', '\u0647')
     return unicodedata.normalize('NFKC', text)
 
 def extract_usernames_from_text(text):
@@ -35,395 +26,121 @@ def convert_phone_number_format(phone_number_str):
     return phone_number_str
 
 class EitaaBot:
-    def __init__(self, min_delay=2.0, max_delay=5.0, session_file='session.pkl', headless=False):
+    def __init__(self, min_delay=2.0, max_delay=5.0, session_file='session.json', headless=True):
         self.min_delay = min_delay
         self.max_delay = max_delay
         self.session_file = session_file
         self.headless = headless
-        self.driver = None
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.page = None
         self.is_logged_in = False
         
-        # المنت‌های اصلی ایتا (از کد فعلی استخراج شده)
         self.selectors = {
-            # لاگین
             'login_page': 'https://web.eitaa.com/',
             'phone_input': 'div.input-field-phone div.input-field-input[contenteditable="true"]',
-            'code_input': 'input[placeholder="کد تأیید"]',  # نیاز به تأیید
-            
-            # جستجو
+            'code_input': 'input[type="tel"]',
             'search_box': 'input.input-search-input[placeholder="جستجو"]',
-            
-            # گروه
-            'group_item': 'li.rp.chatlist-chat',
-            'group_title': 'span.peer-title > i',
-            
-            # پیام‌ها
-            'chat_container': '#chatlist-container',
+            'message_input': 'div.input-message-input[contenteditable="true"]',
+            'send_button': 'button.btn-send',
+            'chat_list_item': 'li.chatlist-chat',
             'message_bubble': 'div.bubble',
             'message_text': 'div.message',
-            'bubbles_container': 'div.bubbles div.scrollable-y',
-            
-            # ارسال پیام
-            'message_input': 'div.input-message-input[contenteditable="true"]:not(.input-field-input-fake)',
-            'send_button': 'button.btn-send',  # نیاز به تأیید
-            
-            # کاربران
-            'user_item': 'li.rp.chatlist-chat',
-            'user_last_message': 'p.dialog-subtitle > span.user-last-message > i',
-            
-            # عمومی
-            'loading': 'div.loading',
-            'error': 'div.error-message'
         }
-        
-        # استراتژی‌های جایگزین برای تطبیق‌پذیری
-        self.alternative_selectors = {
-            'phone_input': [
-                '//div[contains(@class, "input-field-phone")]//div[@contenteditable="true"]',
-                '//div[@contenteditable="true" and contains(@class, "input-field-input")]'
-            ],
-            'search_box': [
-                '//input[@placeholder="جستجو" and contains(@class, "input-search-input")]',
-                '//input[contains(@class, "search") and @placeholder="جستجو"]'
-            ],
-            'message_input': [
-                '//div[@contenteditable="true" and contains(@class, "input-message-input")]',
-                '//div[contains(@class, "input-message") and @contenteditable="true"]'
-            ]
-        }
-    
-    def _find_element(self, selector_name, timeout=10):
-        """پیدا کردن المان با استراتژی‌های مختلف"""
-        # ابتدا با CSS اصلی
-        try:
-            return WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, self.selectors[selector_name]))
-            )
-        except TimeoutException:
-            # اگر پیدا نشد، با استراتژی‌های جایگزین
-            if selector_name in self.alternative_selectors:
-                for xpath in self.alternative_selectors[selector_name]:
-                    try:
-                        return WebDriverWait(self.driver, 3).until(
-                            EC.presence_of_element_located((By.XPATH, xpath))
-                        )
-                    except TimeoutException:
-                        continue
-            
-            # اگر هیچ کدام کار نکرد
-            raise NoSuchElementException(f"Element {selector_name} not found with any selector")
-    
-    def _find_elements(self, selector_name):
-        """پیدا کردن چندین المان"""
-        try:
-            return self.driver.find_elements(By.CSS_SELECTOR, self.selectors[selector_name])
-        except:
-            return []
-    
+
     def _wait_random_delay(self):
-        """انتظار رندوم بین حداقل و حداکثر"""
-        delay = random.uniform(self.min_delay, self.max_delay)
-        time.sleep(delay)
-        return delay
-    
-    def load_session(self):
-        """بارگذاری نشست ذخیره شده"""
-        if os.path.exists(self.session_file):
-            try:
-                self.driver.get("https://web.eitaa.com/")
-                time.sleep(2)
-                
-                # بررسی آیا کاربر وارد شده است
-                if self._is_logged_in():
-                    self.is_logged_in = True
-                    return True
-            except:
-                pass
-        return False
-    
-    def _is_logged_in(self):
-        """بررسی آیا کاربر وارد شده است"""
-        try:
-            # بررسی وجود عناصر پس از لاگین
-            elements_to_check = [
-                self.selectors['chat_container'],
-                self.selectors['search_box']
-            ]
-            
-            for selector in elements_to_check:
-                try:
-                    self.driver.find_element(By.CSS_SELECTOR, selector)
-                    return True
-                except:
-                    continue
-            return False
-        except:
-            return False
-    
-    def save_session(self):
-        """ذخیره کوکی‌های نشست فعلی"""
-        if self.driver:
-            try:
-                cookies = self.driver.get_cookies()
-                session_data = {
-                    'cookies': cookies,
-                    'url': self.driver.current_url,
-                    'saved_at': datetime.now().isoformat()
-                }
-                with open(self.session_file, 'wb') as f:
-                    pickle.dump(session_data, f)
-                return True
-            except Exception as e:
-                print(f"خطا در ذخیره نشست: {e}")
-                return False
-        return False
-    
+        time.sleep(random.uniform(self.min_delay, self.max_delay))
+
     def login(self, phone_number=None):
-        """لاگین به ایتا"""
         try:
-            # تنظیمات Chrome
-            options = webdriver.ChromeOptions()
-            if self.headless:
-                options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--window-size=1200,800')
-            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            self.playwright = sync_playwright().start()
+            self.browser = self.playwright.chromium.launch(headless=self.headless)
             
-            self.driver = webdriver.Chrome(options=options)
-            
-            # رفتن به صفحه ایتا
-            self.driver.get(self.selectors['login_page'])
-            time.sleep(3)
-            
-            # بررسی آیا قبلاً لاگین شده‌اید
-            if self._is_logged_in():
-                self.is_logged_in = True
-                print("✅ قبلاً وارد شده‌اید")
-                return True
-            
-            # وارد کردن شماره تلفن
-            if phone_number:
-                try:
-                    phone_input = self._find_element('phone_input', 20)
-                    phone_input.clear()
-                    phone_input.send_keys(phone_number)
-                    phone_input.send_keys(Keys.RETURN)
-                    print(f"شماره {phone_number} وارد شد")
-                    
-                    # منتظر ماندن برای ورود دستی کاربر
-                    print("⏳ لطفاً در مرورگر باز شده:")
-                    print("1. کد تأیید را وارد کنید")
-                    print("2. پس از ورود به صفحه اصلی، برگردید")
-                    print("3. دکمه 'تأیید لاگین' را در برنامه بزنید")
-                    
-                    return "waiting_for_user"
-                except Exception as e:
-                    print(f"خطا در وارد کردن شماره: {e}")
-                    return False
-            
-            return False
-                
-        except Exception as e:
-            print(f"خطا در لاگین: {e}")
-            if self.driver:
-                self.driver.save_screenshot('login_error.png')
-            return False
-    
-    def confirm_login(self):
-        """تأیید اینکه کاربر دستی لاگین کرده است"""
-        try:
-            # منتظر بارگذاری صفحه اصلی
-            time.sleep(5)
-            
-            if self._is_logged_in():
-                self.is_logged_in = True
-                self.save_session()
-                print("✅ لاگین تأیید شد و نشست ذخیره گردید")
-                return True
-            else:
-                print("❌ لاگین تایید نشد. لطفاً دوباره تلاش کنید")
-                return False
-        except Exception as e:
-            print(f"خطا در تأیید لاگین: {e}")
-            return False
-    
-    def send_direct_message(self, username, message):
-        """ارسال پیام مستقیم به یک کاربر"""
-        if not self.is_logged_in:
-            raise Exception("ابتدا باید لاگین کنید")
-        
-        try:
-            # پیدا کردن فیلد جستجو
-            search_box = self._find_element('search_box', 10)
-            search_box.clear()
-            time.sleep(0.5)
-            
-            # جستجوی کاربر
-            search_box.send_keys(username)
-            time.sleep(2)  # منتظر نتایج
-            
-            # پیدا کردن کاربر در نتایج
+            storage_state = self.session_file if os.path.exists(self.session_file) else None
+            self.context = self.browser.new_context(storage_state=storage_state)
+            self.page = self.context.new_page()
+
+            self.page.goto(self.selectors['login_page'], timeout=60000)
+
             try:
-                # جستجوی کاربر با نام کاربری
-                user_elements = self._find_elements('user_item')
-                user_found = False
-                
-                for user_element in user_elements:
-                    try:
-                        user_text = user_element.text
-                        if username.lower() in user_text.lower():
-                            user_element.click()
-                            user_found = True
-                            break
-                    except:
-                        continue
-                
-                if not user_found:
-                    raise NoSuchElementException(f"User {username} not found in search results")
-                
-                # منتظر باز شدن چت
-                time.sleep(2)
-                
-                # پیدا کردن فیلد پیام
-                message_input = self._find_element('message_input', 10)
-                message_input.clear()
-                
-                # ارسال پیام کاراکتر به کاراکتر (شبیه تایپ انسان)
-                normalized_message = normalize_persian_text(message)
-                for char in normalized_message:
-                    message_input.send_keys(char)
-                    time.sleep(random.uniform(0.05, 0.15))  # تایپ طبیعی
-                
-                # ارسال پیام
-                message_input.send_keys(Keys.RETURN)
-                
-                # تأخیر رندوم
-                delay = self._wait_random_delay()
-                
-                print(f"✅ پیام به {username} ارسال شد (تأخیر: {delay:.1f}ثانیه)")
-                return True
-                
-            except Exception as e:
-                print(f"خطا در یافتن کاربر {username}: {e}")
-                return False
-                
+                self.page.wait_for_selector(self.selectors['search_box'], timeout=10000)
+                self.is_logged_in = True
+                return "already_logged_in"
+            except PlaywrightTimeoutError:
+                pass
+
+            if not phone_number:
+                return "phone_number_required"
+
+            phone_input = self.page.locator(self.selectors['phone_input'])
+            phone_input.wait_for(timeout=30000)
+            phone_input.fill(phone_number)
+            phone_input.press('Enter')
+            
+            code_input = self.page.locator(self.selectors['code_input'])
+            code_input.wait_for(timeout=30000)
+            
+            return "waiting_for_code"
+
         except Exception as e:
-            print(f"خطا در ارسال پیام به {username}: {e}")
-            if self.driver:
-                self.driver.save_screenshot(f'send_error_{username}.png')
+            if self.page:
+                self.page.screenshot(path='login_error.png')
+            return f"error: {e}"
+
+    def submit_code(self, code):
+        try:
+            if not self.page:
+                return "error: page_not_initialized"
+
+            code_input = self.page.locator(self.selectors['code_input'])
+            code_input.fill(code)
+
+            self.page.wait_for_selector(self.selectors['search_box'], timeout=60000)
+            
+            self.is_logged_in = True
+            
+            storage = self.context.storage_state()
+            with open(self.session_file, 'w') as f:
+                json.dump(storage, f)
+            
+            return "login_successful"
+        
+        except Exception as e:
+            if self.page:
+                self.page.screenshot(path='submit_code_error.png')
+            return f"error: {e}"
+
+    def send_direct_message(self, username, message):
+        if not self.is_logged_in:
             return False
-    
-    def extract_group_members(self, group_name):
-        """استخراج اعضای گروه"""
-        if not self.is_logged_in:
-            raise Exception("ابتدا باید لاگین کنید")
         
-        members = []
         try:
-            # جستجوی گروه
-            search_box = self._find_element('search_box', 10)
-            search_box.clear()
-            time.sleep(0.5)
+            search_box = self.page.locator(self.selectors['search_box'])
+            search_box.fill(username)
+            self._wait_random_delay()
+
+            user_in_list = self.page.locator(f"{self.selectors['chat_list_item']}:has-text('{username.lstrip('@')}')")
+            user_in_list.first.click()
+
+            message_input = self.page.locator(self.selectors['message_input'])
+            message_input.fill(message)
+            message_input.press('Enter')
+
+            self._wait_random_delay()
+            return True
+        except Exception:
+            if self.page:
+                self.page.screenshot(path=f'send_message_error_{username}.png')
+            return False
             
-            normalized_group_name = normalize_persian_text(group_name)
-            search_box.send_keys(normalized_group_name)
-            time.sleep(2)
-            
-            # پیدا کردن گروه
-            group_elements = self._find_elements('group_item')
-            group_found = False
-            
-            for group_element in group_elements:
-                try:
-                    group_text = group_element.text
-                    if normalized_group_name in normalize_persian_text(group_text):
-                        group_element.click()
-                        group_found = True
-                        break
-                except:
-                    continue
-            
-            if not group_found:
-                raise NoSuchElementException(f"Group {group_name} not found")
-            
-            # منتظر بارگذاری گروه
-            time.sleep(3)
-            
-            # اینجا منطق استخراج اعضا نیاز به بررسی دقیق‌تر UI ایتا دارد
-            # در نسخه فعلی، این بخش نیاز به توسعه دارد
-            print(f"⚠️ استخراج اعضای گروه نیاز به توسعه بیشتر دارد")
-            
-            return members
-            
-        except Exception as e:
-            print(f"خطا در استخراج اعضای گروه: {e}")
-            return members
-    
-    def extract_usernames_from_group_message(self, group_name, message_prefix):
-        """استخراج نام کاربری‌ها از پیام گروه با پیشوند خاص"""
-        if not self.is_logged_in:
-            raise Exception("ابتدا باید لاگین کنید")
-        
-        usernames = []
-        try:
-            # ورود به گروه
-            search_box = self._find_element('search_box', 10)
-            search_box.clear()
-            time.sleep(0.5)
-            
-            normalized_group_name = normalize_persian_text(group_name)
-            search_box.send_keys(normalized_group_name)
-            time.sleep(2)
-            
-            # پیدا کردن گروه
-            group_elements = self._find_elements('group_item')
-            group_found = False
-            
-            for group_element in group_elements:
-                try:
-                    group_text = group_element.text
-                    if normalized_group_name in normalize_persian_text(group_text):
-                        group_element.click()
-                        group_found = True
-                        break
-                except:
-                    continue
-            
-            if not group_found:
-                raise NoSuchElementException(f"Group {group_name} not found")
-            
-            # منتظر بارگذاری پیام‌ها
-            time.sleep(3)
-            
-            # اسکرول و پیدا کردن پیام‌ها
-            normalized_prefix = normalize_persian_text(message_prefix)
-            
-            # پیدا کردن حباب‌های پیام
-            message_bubbles = self._find_elements('message_bubble')
-            
-            for bubble in message_bubbles[-20:]:  # بررسی 20 پیام آخر
-                try:
-                    message_element = bubble.find_element(By.CSS_SELECTOR, self.selectors['message_text'])
-                    message_text = message_element.text
-                    
-                    if normalized_prefix in normalize_persian_text(message_text):
-                        # استخراج نام کاربری‌ها
-                        found_usernames = extract_usernames_from_text(message_text)
-                        usernames.extend(found_usernames)
-                        break
-                except:
-                    continue
-            
-            return list(set(usernames))  # حذف تکراری‌ها
-            
-        except Exception as e:
-            print(f"خطا در استخراج نام کاربری‌ها از گروه: {e}")
-            return usernames
-    
+    def close(self):
+        if self.browser:
+            self.browser.close()
+        if self.playwright:
+            self.playwright.stop()
+
     def read_usernames_from_excel(self, excel_path):
-        """خواندن نام کاربری‌ها از فایل اکسل"""
         try:
             df = pd.read_excel(excel_path, header=None)
             usernames = []
@@ -433,18 +150,49 @@ class EitaaBot:
                     if isinstance(value, str) and value.startswith('@'):
                         usernames.append(value.strip())
             
-            return list(set(usernames))  # حذف تکراری‌ها
+            return list(set(usernames))
         except Exception as e:
             print(f"خطا در خواندن فایل اکسل: {e}")
             return []
     
-    def close(self):
-        """بستن مرورگر و ذخیره نشست"""
-        if self.driver:
-            try:
-                self.save_session()
-                self.driver.quit()
-                print("مرورگر بسته شد و نشست ذخیره گردید")
-            except:
-                pass
-        self.is_logged_in = False
+    def extract_usernames_from_group_message(self, group_name, message_prefix):
+        if not self.is_logged_in:
+            return []
+
+        try:
+            # 1. Search for the group
+            search_box = self.page.locator(self.selectors['search_box'])
+            search_box.fill(group_name)
+            self._wait_random_delay()
+
+            # 2. Click on the group in the chat list
+            group_in_list = self.page.locator(f"{self.selectors['chat_list_item']}:has-text('{group_name}')")
+            group_in_list.first.click()
+            self.page.wait_for_load_state('networkidle')
+
+            # 3. Find the message with the prefix
+            normalized_prefix = normalize_persian_text(message_prefix)
+            message_bubbles = self.page.locator(self.selectors['message_bubble'])
+
+            # Iterate through recent messages to find the one with the prefix
+            # This might need adjustment based on how many messages are loaded at once
+            for i in range(message_bubbles.count() - 1, -1, -1):
+                bubble = message_bubbles.nth(i)
+                message_text_element = bubble.locator(self.selectors['message_text'])
+                if message_text_element.count() > 0:
+                    text_content = message_text_element.inner_text()
+                    if normalize_persian_text(text_content).startswith(normalized_prefix):
+                        # Found the message, extract usernames
+                        return extract_usernames_from_text(text_content)
+
+            # If the loop finishes without finding the message
+            return []
+
+        except Exception as e:
+            print(f"Error extracting usernames from group: {e}")
+            if self.page:
+                self.page.screenshot(path='extract_usernames_error.png')
+            return []
+
+    def confirm_login(self):
+        return self.is_logged_in

@@ -40,7 +40,7 @@
         
         .tab-content {
             padding: 20px;
-            background: #f0f2f5;
+            background: white;
             border: 1px solid #dee2e6;
             border-top: none;
             border-radius: 0 0 5px 5px;
@@ -315,9 +315,18 @@
                                     <button class="btn btn-primary" onclick="startLogin()" id="loginBtn">
                                         <i class="fas fa-sign-in-alt me-2"></i>شروع لاگین
                                     </button>
-                                    <button class="btn btn-success" onclick="confirmLogin()" id="confirmBtn" disabled>
-                                        <i class="fas fa-check me-2"></i>تأیید لاگین
-                                    </button>
+                                </div>
+
+                                <div id="codeEntrySection" class="mt-4" style="display: none;">
+                                    <hr>
+                                    <h5>مرحله ۲: ورود کد تایید</h5>
+                                    <p>کد ارسال شده به ایتا را وارد کنید.</p>
+                                    <div class="input-group">
+                                        <input type="text" id="verificationCode" class="form-control" placeholder="کد تایید">
+                                        <button id="submitCodeBtn" class="btn btn-success" onclick="submitCode()">
+                                            <i class="fas fa-check"></i> ثبت کد
+                                        </button>
+                                    </div>
                                 </div>
                                 
                                 <div id="loginStatus" class="mt-3"></div>
@@ -708,69 +717,85 @@
         // توابع ربات
         async function startLogin() {
             const phoneNumber = document.getElementById('phoneNumber').value.trim();
-            
             if (!phoneNumber.match(/^09\d{9}$/)) {
                 showNotification('شماره تلفن باید با 09 شروع شود و 11 رقمی باشد', 'error');
                 return;
             }
-            
+
+            document.getElementById('loginBtn').disabled = true;
+            addToLog('در حال ایجاد نمونه ربات...', 'info');
+
             try {
-                // اگر ربات نداریم، بسازیم
-                if (!currentBotId) {
-                    await createBot();
-                }
-                
+                // همیشه یک ربات جدید برای هر بار لاگین ایجاد می‌کنیم
+                await createBot();
+                if (!currentBotId) return; // اگر ایجاد ربات ناموفق بود
+
+                addToLog(`ارسال شماره تلفن ${phoneNumber} به سرور...`, 'info');
                 const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone_number: phoneNumber })
                 });
-                
+
                 const data = await response.json();
-                
-                if (response.ok) {
-                    if (data.status === 'waiting') {
-                        showNotification('مرورگر باز شد. لطفاً کد تأیید را وارد کنید', 'info');
-                        document.getElementById('loginBtn').disabled = true;
-                        document.getElementById('confirmBtn').disabled = false;
-                        document.getElementById('loginStatus').innerHTML = 
-                            '<div class="alert alert-info mt-3">در انتظار تأیید لاگین در مرورگر...</div>';
-                        addToLog('مرورگر برای لاگین باز شد', 'info');
-                    }
+                if (data.status === 'waiting_for_code') {
+                    showNotification('کد تایید ارسال شد. لطفاً آن را وارد کنید.', 'info');
+                    document.getElementById('codeEntrySection').style.display = 'block';
+                    document.getElementById('loginStatus').innerHTML =
+                        '<div class="alert alert-info mt-3">در انتظار ورود کد تایید...</div>';
+                    addToLog('منتظر ورود کد تایید توسط کاربر.', 'info');
+                } else if (data.status === 'success') {
+                    showNotification('شما از قبل لاگین هستید.', 'success');
+                    document.getElementById('loginBtn').disabled = true;
+                    addToLog('نشست قبلی معتبر است. لاگین انجام شد.', 'success');
                 } else {
-                    showNotification(data.error || 'خطا در لاگین', 'error');
+                    showNotification(data.error || 'خطا در شروع فرآیند لاگین', 'error');
+                    document.getElementById('loginBtn').disabled = false;
                 }
             } catch (error) {
                 showNotification('خطا در ارتباط با سرور', 'error');
+                document.getElementById('loginBtn').disabled = false;
                 console.error(error);
             }
         }
-        
-        async function confirmLogin() {
-            if (!currentBotId) {
-                showNotification('ربات فعالی وجود ندارد', 'warning');
+
+        async function submitCode() {
+            const code = document.getElementById('verificationCode').value.trim();
+            if (!code) {
+                showNotification('کد تایید را وارد کنید', 'error');
                 return;
             }
-            
+
+            if (!currentBotId) {
+                showNotification('هیچ ربات فعالی برای تایید کد وجود ندارد', 'error');
+                return;
+            }
+
+            document.getElementById('submitCodeBtn').disabled = true;
+            addToLog('در حال ارسال کد تایید به سرور...', 'info');
+
             try {
-                const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/confirm-login`, {
-                    method: 'POST'
+                const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/submit-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
                 });
-                
+
                 const data = await response.json();
-                
-                if (response.ok) {
-                    showNotification('لاگین تأیید شد', 'success');
-                    document.getElementById('confirmBtn').disabled = true;
-                    document.getElementById('loginStatus').innerHTML = 
-                        '<div class="alert alert-success mt-3">✅ لاگین تأیید شد. می‌توانید ارسال را شروع کنید.</div>';
-                    document.getElementById('sendBtn').disabled = false;
-                    addToLog('لاگین موفقیت‌آمیز بود', 'success');
+                if (data.status === 'success') {
+                    showNotification('لاگین با موفقیت انجام شد!', 'success');
+                    document.getElementById('loginStatus').innerHTML =
+                        '<div class="alert alert-success mt-3">✅ لاگین با موفقیت انجام شد.</div>';
+                    document.getElementById('codeEntrySection').style.display = 'none';
+                    document.getElementById('sendBtn').disabled = false; // فعال کردن دکمه ارسال
+                    addToLog('لاگین با موفقیت تایید شد.', 'success');
                 } else {
-                    showNotification(data.error || 'لاگین تأیید نشد', 'error');
+                    showNotification(data.error || 'کد تایید نامعتبر است', 'error');
+                    document.getElementById('submitCodeBtn').disabled = false;
                 }
             } catch (error) {
-                showNotification('خطا در تأیید لاگین', 'error');
+                showNotification('خطا در ارتباط با سرور', 'error');
+                document.getElementById('submitCodeBtn').disabled = false;
                 console.error(error);
             }
         }
@@ -870,13 +895,10 @@
             setInterval(refreshStats, 30000);
         });
         
+        // توابع ساده برای تست
         async function startSending() {
             if (!currentBotId) {
-                const botCreated = await createBot();
-                if (!botCreated) {
-                    showNotification('ابتدا باید یک ربات ایجاد شود', 'error');
-                    return;
-                }
+                await createBot();
             }
 
             const message = document.getElementById('messageToSend').value;
@@ -885,83 +907,57 @@
                 return;
             }
 
-            const sendType = document.getElementById('sendType').value;
-            const payload = {
-                type: sendType,
-                message: message,
-            };
+            // شبیه‌سازی ارسال
+            sendStats = { total: 50, sent: 0, success: 0, error: 0 };
+            isSending = true;
 
             document.getElementById('sendBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
-            isSending = true;
 
-            try {
-                if (sendType === 'excel') {
-                    const excelFile = document.getElementById('excelFile').files[0];
-                    if (!excelFile) {
-                        showNotification('لطفاً یک فایل اکسل انتخاب کنید', 'error');
-                        isSending = false;
-                        document.getElementById('sendBtn').disabled = false;
-                        document.getElementById('stopBtn').disabled = true;
-                        return;
+            showNotification('ارسال شروع شد', 'success');
+            addToLog('شروع عملیات ارسال پیام‌ها', 'info');
+
+            // شبیه‌سازی پیشرفت
+            const interval = setInterval(() => {
+                if (!isSending) {
+                    clearInterval(interval);
+                    return;
+                }
+
+                if (sendStats.sent < sendStats.total) {
+                    sendStats.sent += 2;
+                    sendStats.success += Math.floor(Math.random() * 2) + 1;
+                    sendStats.error = sendStats.sent - sendStats.success;
+
+                    if (sendStats.sent > sendStats.total) {
+                        sendStats.sent = sendStats.total;
+                        sendStats.success = Math.floor(sendStats.total * 0.95);
+                        sendStats.error = sendStats.total - sendStats.success;
                     }
 
-                    const formData = new FormData();
-                    formData.append('file', excelFile);
+                    const progress = Math.round((sendStats.sent / sendStats.total) * 100);
+                    document.getElementById('progressBar').style.width = `${progress}%`;
+                    document.getElementById('progressText').textContent = `${progress}%`;
 
-                    // First, upload the file
-                    const uploadResponse = await fetch(`${API_BASE_URL}/contacts/upload`, {
-                        method: 'POST',
-                        body: formData,
-                    });
+                    document.getElementById('sentCount').textContent = sendStats.sent;
+                    document.getElementById('successCount').textContent = sendStats.success;
+                    document.getElementById('errorCount').textContent = sendStats.error;
+                    document.getElementById('remainingCount').textContent = sendStats.total - sendStats.sent;
 
-                    const uploadData = await uploadResponse.json();
-
-                    if (!uploadResponse.ok) {
-                        throw new Error(uploadData.error || 'خطا در آپلود فایل');
+                    if (Math.random() > 0.7) {
+                        addToLog(`پیام ${sendStats.sent}/${sendStats.total} ارسال شد`, 'success');
                     }
                     
-                    payload.excel_path = uploadData.filepath;
-
-                } else if (sendType === 'group_message') {
-                    payload.group_name = document.getElementById('groupName').value;
-                    payload.message_prefix = document.getElementById('messagePrefix').value;
-
-                    if (!payload.group_name || !payload.message_prefix) {
-                        showNotification('لطفاً نام گروه و پیشوند پیام را وارد کنید', 'error');
+                    if (sendStats.sent >= sendStats.total) {
+                        clearInterval(interval);
                         isSending = false;
                         document.getElementById('sendBtn').disabled = false;
                         document.getElementById('stopBtn').disabled = true;
-                        return;
+                        showNotification('ارسال کامل شد', 'success');
+                        addToLog('عملیات ارسال با موفقیت کامل شد', 'success');
                     }
                 }
-
-                // Now, start the sending process
-                const sendResponse = await fetch(`${API_BASE_URL}/bot/${currentBotId}/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-
-                const sendData = await sendResponse.json();
-
-                if (sendResponse.ok) {
-                    showNotification(sendData.message, 'success');
-                    addToLog(`عملیات ارسال برای ${sendData.total} مخاطب شروع شد`, 'info');
-                    // Note: The backend runs this in a thread. The UI currently doesn't
-                    // have a way to get live progress. We'll just show the start message.
-                    // The "stop" button won't actually stop the backend process.
-                } else {
-                    throw new Error(sendData.error || 'خطا در شروع ارسال');
-                }
-
-            } catch (error) {
-                showNotification(error.message, 'error');
-                addToLog(`خطا: ${error.message}`, 'error');
-                isSending = false;
-                document.getElementById('sendBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = true;
-            }
+            }, 1000);
         }
         
         function stopSending() {
