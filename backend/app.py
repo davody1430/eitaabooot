@@ -1,10 +1,11 @@
-# backend/app.py - Final version with complete logic
+# backend/app.py
+import asyncio
+import threading
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import os
-import threading
-from bot_core import EitaaBot
-import sqlite3
+from bot_core import EitaaBot, convert_phone_number_format
+import time
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__, template_folder='../frontend', static_folder='../frontend')
@@ -19,39 +20,39 @@ app.config.update(
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['SESSION_FOLDER'], exist_ok=True)
 
-def init_db():
-    # ... (Database initialization code remains the same)
-    pass
+# --- asyncio event loop management ---
+def run_async_loop(loop):
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
 
-def convert_phone_number_format(phone_number_str):
-    from bot_core import convert_phone_number_format
-    return convert_phone_number_format(phone_number_str)
+loop = asyncio.new_event_loop()
+t = threading.Thread(target=run_async_loop, args=(loop,), daemon=True)
+t.start()
+# ------------------------------------
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/api/settings', methods=['GET', 'POST'])
-def handle_settings():
-    # ... (Settings handling remains the same)
-    pass
-
 @app.route('/api/bot/create', methods=['POST'])
 def create_bot():
-    bot_id = request.json.get('bot_id', f"bot_{int(time.time())}")
+    bot_id = request.json.get('bot_id', f"bot_{int(time.time() * 1000)}")
     session_file = os.path.join(app.config['SESSION_FOLDER'], f"session_{bot_id}.json")
-    headless = request.json.get('headless', True) # Default to headless
+    headless = request.json.get('headless', True)
 
     if bot_id in app.config['BOT_INSTANCES']:
-        app.config['BOT_INSTANCES'][bot_id].close()
+        old_bot = app.config['BOT_INSTANCES'][bot_id]
+        asyncio.run_coroutine_threadsafe(old_bot.close(), loop)
 
     bot = EitaaBot(session_file=session_file, headless=headless)
     app.config['BOT_INSTANCES'][bot_id] = bot
+
+    asyncio.run_coroutine_threadsafe(bot.start(), loop)
+
     return jsonify({'status': 'success', 'bot_id': bot_id})
 
 @app.route('/api/bot/<bot_id>/login', methods=['POST'])
 def bot_login(bot_id):
-    # ... (Login logic remains the same)
     if bot_id not in app.config['BOT_INSTANCES']:
         return jsonify({'error': 'Bot not found'}), 404
 
@@ -62,7 +63,9 @@ def bot_login(bot_id):
 
     try:
         converted_phone = convert_phone_number_format(phone_number)
-        result = bot.login(phone_number=converted_phone)
+
+        future = asyncio.run_coroutine_threadsafe(bot.login(phone_number=converted_phone), loop)
+        result = future.result()
 
         if result == "waiting_for_code":
             return jsonify({'status': 'waiting_for_code'})
@@ -73,10 +76,8 @@ def bot_login(bot_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/api/bot/<bot_id>/submit-code', methods=['POST'])
 def submit_code(bot_id):
-    # ... (Submit code logic remains the same)
     if bot_id not in app.config['BOT_INSTANCES']:
         return jsonify({'error': 'Bot not found'}), 404
 
@@ -86,7 +87,9 @@ def submit_code(bot_id):
         return jsonify({'error': 'Verification code is required'}), 400
 
     try:
-        result = bot.submit_code(code)
+        future = asyncio.run_coroutine_threadsafe(bot.submit_code(code), loop)
+        result = future.result()
+
         if result == "login_successful":
             return jsonify({'status': 'success'})
         else:
@@ -118,25 +121,23 @@ def send_messages(bot_id):
         message_prefix = data.get('message_prefix')
         if not group_name or not message_prefix:
             return jsonify({'error': 'Group name and message prefix are required'}), 400
-        usernames = bot.extract_usernames_from_group_message(group_name, message_prefix)
+
+        future = asyncio.run_coroutine_threadsafe(bot.extract_usernames_from_group_message(group_name, message_prefix), loop)
+        usernames = future.result()
 
     if not usernames:
         return jsonify({'error': 'No usernames found to send messages to'}), 400
 
-    def send_thread(users, msg):
-        for i, user in enumerate(users):
-            success = bot.send_direct_message(user, msg)
-            # Here you could update a status dictionary or use websockets to report progress
-            print(f"Sent to {user}: {'Success' if success else 'Failed'}")
+    async def send_task(users, msg):
+        for user in users:
+            await bot.send_direct_message(user, msg)
 
-    thread = threading.Thread(target=send_thread, args=(usernames, message), daemon=True)
-    thread.start()
+    asyncio.run_coroutine_threadsafe(send_task(usernames, message), loop)
 
     return jsonify({'status': 'started', 'total': len(usernames)})
 
 @app.route('/api/contacts/upload', methods=['POST'])
 def upload_contacts():
-    # ... (Upload logic remains the same)
     if 'file' not in request.files:
         return jsonify({'error': 'No file selected'}), 400
     file = request.files['file']
@@ -149,6 +150,6 @@ def upload_contacts():
         return jsonify({'status': 'success', 'filepath': filepath})
     return jsonify({'error': 'Unknown error during file upload'}), 500
 
+
 if __name__ == '__main__':
-    init_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
