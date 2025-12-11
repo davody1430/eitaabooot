@@ -40,7 +40,7 @@
         
         .tab-content {
             padding: 20px;
-            background: white;
+            background: #f0f2f5;
             border: 1px solid #dee2e6;
             border-top: none;
             border-radius: 0 0 5px 5px;
@@ -870,69 +870,98 @@
             setInterval(refreshStats, 30000);
         });
         
-        // توابع ساده برای تست
         async function startSending() {
             if (!currentBotId) {
-                await createBot();
+                const botCreated = await createBot();
+                if (!botCreated) {
+                    showNotification('ابتدا باید یک ربات ایجاد شود', 'error');
+                    return;
+                }
             }
-            
+
             const message = document.getElementById('messageToSend').value;
             if (!message.trim()) {
                 showNotification('لطفاً متن پیام را وارد کنید', 'error');
                 return;
             }
-            
-            // شبیه‌سازی ارسال
-            sendStats = { total: 50, sent: 0, success: 0, error: 0 };
-            isSending = true;
-            
+
+            const sendType = document.getElementById('sendType').value;
+            const payload = {
+                type: sendType,
+                message: message,
+            };
+
             document.getElementById('sendBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
-            
-            showNotification('ارسال شروع شد', 'success');
-            addToLog('شروع عملیات ارسال پیام‌ها', 'info');
-            
-            // شبیه‌سازی پیشرفت
-            const interval = setInterval(() => {
-                if (!isSending) {
-                    clearInterval(interval);
-                    return;
-                }
-                
-                if (sendStats.sent < sendStats.total) {
-                    sendStats.sent += 2;
-                    sendStats.success += Math.floor(Math.random() * 2) + 1;
-                    sendStats.error = sendStats.sent - sendStats.success;
-                    
-                    if (sendStats.sent > sendStats.total) {
-                        sendStats.sent = sendStats.total;
-                        sendStats.success = Math.floor(sendStats.total * 0.95);
-                        sendStats.error = sendStats.total - sendStats.success;
-                    }
-                    
-                    const progress = Math.round((sendStats.sent / sendStats.total) * 100);
-                    document.getElementById('progressBar').style.width = `${progress}%`;
-                    document.getElementById('progressText').textContent = `${progress}%`;
-                    
-                    document.getElementById('sentCount').textContent = sendStats.sent;
-                    document.getElementById('successCount').textContent = sendStats.success;
-                    document.getElementById('errorCount').textContent = sendStats.error;
-                    document.getElementById('remainingCount').textContent = sendStats.total - sendStats.sent;
-                    
-                    if (Math.random() > 0.7) {
-                        addToLog(`پیام ${sendStats.sent}/${sendStats.total} ارسال شد`, 'success');
-                    }
-                    
-                    if (sendStats.sent >= sendStats.total) {
-                        clearInterval(interval);
+            isSending = true;
+
+            try {
+                if (sendType === 'excel') {
+                    const excelFile = document.getElementById('excelFile').files[0];
+                    if (!excelFile) {
+                        showNotification('لطفاً یک فایل اکسل انتخاب کنید', 'error');
                         isSending = false;
                         document.getElementById('sendBtn').disabled = false;
                         document.getElementById('stopBtn').disabled = true;
-                        showNotification('ارسال کامل شد', 'success');
-                        addToLog('عملیات ارسال با موفقیت کامل شد', 'success');
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('file', excelFile);
+
+                    // First, upload the file
+                    const uploadResponse = await fetch(`${API_BASE_URL}/contacts/upload`, {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    const uploadData = await uploadResponse.json();
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(uploadData.error || 'خطا در آپلود فایل');
+                    }
+                    
+                    payload.excel_path = uploadData.filepath;
+
+                } else if (sendType === 'group_message') {
+                    payload.group_name = document.getElementById('groupName').value;
+                    payload.message_prefix = document.getElementById('messagePrefix').value;
+
+                    if (!payload.group_name || !payload.message_prefix) {
+                        showNotification('لطفاً نام گروه و پیشوند پیام را وارد کنید', 'error');
+                        isSending = false;
+                        document.getElementById('sendBtn').disabled = false;
+                        document.getElementById('stopBtn').disabled = true;
+                        return;
                     }
                 }
-            }, 1000);
+
+                // Now, start the sending process
+                const sendResponse = await fetch(`${API_BASE_URL}/bot/${currentBotId}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                const sendData = await sendResponse.json();
+
+                if (sendResponse.ok) {
+                    showNotification(sendData.message, 'success');
+                    addToLog(`عملیات ارسال برای ${sendData.total} مخاطب شروع شد`, 'info');
+                    // Note: The backend runs this in a thread. The UI currently doesn't
+                    // have a way to get live progress. We'll just show the start message.
+                    // The "stop" button won't actually stop the backend process.
+                } else {
+                    throw new Error(sendData.error || 'خطا در شروع ارسال');
+                }
+
+            } catch (error) {
+                showNotification(error.message, 'error');
+                addToLog(`خطا: ${error.message}`, 'error');
+                isSending = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
         }
         
         function stopSending() {
