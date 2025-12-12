@@ -64,7 +64,9 @@ def handle_settings():
 def create_bot():
     bot_id = request.json.get('bot_id', str(int(time.time())))
     session_file = f"{app.config['SESSION_FOLDER']}/session_{bot_id}.json"
-    bot = EitaaBot(session_file=session_file, headless=True) # Always headless on server
+    from queue import Queue
+    log_queue = Queue()
+    bot = EitaaBot(session_file=session_file, headless=True, log_queue=log_queue)
     app.config['BOT_INSTANCES'][bot_id] = bot
     return jsonify({'status': 'success', 'bot_id': bot_id})
 
@@ -148,13 +150,18 @@ def send_messages(bot_id):
         'sent': 0,
         'success': 0,
         'error': 0,
-        'is_running': True
+        'is_running': True,
+        'logs': []
     }
 
     def send_thread():
         stats = app.config['SEND_STATS'][bot_id]
+        while not bot.log_queue.empty():
+            stats['logs'].append(bot.log_queue.get())
+
         for username in usernames:
             if not stats['is_running']:
+                stats['logs'].append("Sending stopped by user.")
                 break
             success = bot.send_direct_message(username, message)
             stats['sent'] += 1
@@ -162,7 +169,12 @@ def send_messages(bot_id):
                 stats['success'] += 1
             else:
                 stats['error'] += 1
+
+            while not bot.log_queue.empty():
+                stats['logs'].append(bot.log_queue.get())
+
         stats['is_running'] = False
+        stats['logs'].append("Sending process finished.")
 
     thread = threading.Thread(target=send_thread, daemon=True)
     thread.start()
