@@ -16,6 +16,7 @@ app.config['SECRET_KEY'] = 'eitaa-bot-secret-key-2024'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SESSION_FOLDER'] = 'sessions'
 app.config['BOT_INSTANCES'] = {}
+app.config['SEND_STATS'] = {}
 
 for folder in [app.config['UPLOAD_FOLDER'], app.config['SESSION_FOLDER']]:
     os.makedirs(folder, exist_ok=True)
@@ -120,23 +121,68 @@ def send_messages(bot_id):
 
     data = request.json
     message = data.get('message', '')
-    excel_path = data.get('excel_path', '') # This should come from an upload endpoint
+    send_type = data.get('type')
+    usernames = []
 
-    if not excel_path or not os.path.exists(excel_path):
-        return jsonify({'error': 'Excel file path is missing or invalid'}), 400
+    if send_type == 'excel':
+        excel_path = data.get('excel_path', '')
+        if not excel_path or not os.path.exists(excel_path):
+            return jsonify({'error': 'Excel file path is missing or invalid'}), 400
+        usernames = bot.read_usernames_from_excel(excel_path)
+        if not usernames:
+            return jsonify({'error': 'No usernames found in the Excel file'}), 400
+    elif send_type == 'group_message':
+        group_name = data.get('group_name')
+        message_prefix = data.get('message_prefix')
+        if not group_name or not message_prefix:
+            return jsonify({'error': 'Group name and message prefix are required'}), 400
+        usernames = bot.extract_usernames_from_group_message(group_name, message_prefix)
+        if not usernames:
+            return jsonify({'error': 'No usernames found for the given group and prefix'}), 400
+    else:
+        return jsonify({'error': 'Invalid send type specified'}), 400
 
-    usernames = bot.read_usernames_from_excel(excel_path)
-    if not usernames:
-        return jsonify({'error': 'No usernames found in the Excel file'}), 400
+    # Initialize stats for this bot
+    app.config['SEND_STATS'][bot_id] = {
+        'total': len(usernames),
+        'sent': 0,
+        'success': 0,
+        'error': 0,
+        'is_running': True
+    }
 
     def send_thread():
+        stats = app.config['SEND_STATS'][bot_id]
         for username in usernames:
-            bot.send_direct_message(username, message)
+            if not stats['is_running']:
+                break
+            success = bot.send_direct_message(username, message)
+            stats['sent'] += 1
+            if success:
+                stats['success'] += 1
+            else:
+                stats['error'] += 1
+        stats['is_running'] = False
 
     thread = threading.Thread(target=send_thread, daemon=True)
     thread.start()
 
     return jsonify({'status': 'started', 'total': len(usernames)})
+
+@app.route('/api/bot/<bot_id>/send/status', methods=['GET'])
+def send_status(bot_id):
+    stats = app.config['SEND_STATS'].get(bot_id)
+    if not stats:
+        return jsonify({'error': 'No sending process found for this bot'}), 404
+    return jsonify(stats)
+
+@app.route('/api/bot/<bot_id>/send/stop', methods=['POST'])
+def stop_sending(bot_id):
+    stats = app.config['SEND_STATS'].get(bot_id)
+    if stats:
+        stats['is_running'] = False
+        return jsonify({'status': 'stopping'})
+    return jsonify({'error': 'No sending process to stop'}), 404
 
 @app.route('/api/bot/<bot_id>/status', methods=['GET'])
 def bot_status(bot_id):
