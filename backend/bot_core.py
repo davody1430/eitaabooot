@@ -11,20 +11,7 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 # توابع کمکی
 def normalize_persian_text(text):
     if text is None: return None
-    text = text.replace('\u064A', '\u06CC').replace('\u0649', '\u06CC')
-    text = text.replace('\u0643', '\u06A9')
-    text = text.replace('\u0629', '\u0647')
-    return unicodedata.normalize('NFKC', text)
-
-def extract_usernames_from_text(text):
-    if not text: return []
-    return re.findall(r'@[\w\d_]+', text)
-
-def normalize_persian_text(text):
-    if text is None: return None
-    text = text.replace('\u064A', '\u06CC').replace('\u0649', '\u06CC')
-    text = text.replace('\u0643', '\u06A9')
-    text = text.replace('\u0629', '\u0647')
+    text = text.replace('ي', 'ی').replace('ك', 'ک')
     return unicodedata.normalize('NFKC', text)
 
 def extract_usernames_from_text(text):
