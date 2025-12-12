@@ -972,6 +972,7 @@
             }
         }
         
+        let lastLogCount = 0;
         async function updateSendProgress() {
             if (!currentBotId) return;
 
@@ -988,12 +989,17 @@
                     document.getElementById('errorCount').textContent = stats.error;
                     document.getElementById('remainingCount').textContent = stats.total - stats.sent;
 
+                    if (stats.logs && stats.logs.length > lastLogCount) {
+                        const newLogs = stats.logs.slice(lastLogCount);
+                        newLogs.forEach(log => addToLog(log, 'info'));
+                        lastLogCount = stats.logs.length;
+                    }
+
                     if (!stats.is_running) {
                         clearInterval(progressInterval);
                         progressInterval = null;
                         document.getElementById('sendBtn').disabled = false;
                         document.getElementById('stopBtn').disabled = true;
-                        addToLog('ارسال پیام‌ها به پایان رسید.', 'success');
                     }
                 } else {
                     clearInterval(progressInterval);
