@@ -883,9 +883,12 @@
                 <p class="mt-2">در حال بررسی وضعیت نشست...</p>`;
 
             try {
-                await createBot(); // Uses global currentBotId
+                // Only create a new bot if one doesn't exist
                 if (!currentBotId) {
-                    throw new Error("Failed to create a bot for session check.");
+                    await createBot();
+                    if (!currentBotId) {
+                        throw new Error("Failed to create a bot for session check.");
+                    }
                 }
 
                 const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/status`);
@@ -1004,7 +1007,6 @@
                 const sendResult = await sendResponse.json();
                 if (sendResponse.ok) {
                     showNotification(`ارسال به ${sendResult.total} کاربر شروع شد.`, 'success');
-                    addToLog(`عملیات ارسال برای ${sendResult.total} کاربر در پس‌زمینه شروع شد.`, 'success');
                     progressInterval = setInterval(updateSendProgress, 3000);
                 } else {
                     throw new Error(sendResult.error || 'خطا در شروع عملیات ارسال');
