@@ -2,6 +2,7 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import os
+from threading import Lock
 import threading
 import time
 import random
@@ -90,7 +91,8 @@ def create_bot():
         app.config['BOT_INSTANCES'][bot_id] = {
             'bot': bot,
             'log_queue': bot.log_queue,
-            'created_at': datetime.now()
+            'created_at': datetime.now(),
+            'lock': Lock()
         }
         
         # لاگ
@@ -112,35 +114,37 @@ def bot_login(bot_id):
     
     bot_data = app.config['BOT_INSTANCES'][bot_id]
     bot = bot_data['bot']
-    
-    data = request.json or {}
-    phone = data.get('phone_number')
-    
-    if not phone:
-        return jsonify({'error': 'شماره تلفن لازم است'}), 400
-    
-    try:
-        phone_converted = convert_phone_number_format(phone)
-        result = bot.login(phone_number=phone_converted)
-        
-        if "waiting_for_code" in result:
-            log_to_db(bot_id, f"منتظر کد تأیید برای شماره {phone}")
-            return jsonify({
-                'status': 'waiting_for_code',
-                'message': 'کد تأیید ارسال شد'
-            })
-        elif "already_logged_in" in result:
-            log_to_db(bot_id, "کاربر از قبل لاگین است")
-            return jsonify({
-                'status': 'success', 
-                'message': 'قبلاً لاگین شده‌اید'
-            })
-        else:
-            log_to_db(bot_id, f"خطا در لاگین: {result}")
-            return jsonify({'error': result}), 500
-    except Exception as e:
-        log_to_db(bot_id, f"خطا در لاگین: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+    lock = bot_data['lock']
+
+    with lock:
+        data = request.json or {}
+        phone = data.get('phone_number')
+
+        if not phone:
+            return jsonify({'error': 'شماره تلفن لازم است'}), 400
+
+        try:
+            phone_converted = convert_phone_number_format(phone)
+            result = bot.login(phone_number=phone_converted)
+
+            if "waiting_for_code" in result:
+                log_to_db(bot_id, f"منتظر کد تأیید برای شماره {phone}")
+                return jsonify({
+                    'status': 'waiting_for_code',
+                    'message': 'کد تأیید ارسال شد'
+                })
+            elif "already_logged_in" in result:
+                log_to_db(bot_id, "کاربر از قبل لاگین است")
+                return jsonify({
+                    'status': 'success',
+                    'message': 'قبلاً لاگین شده‌اید'
+                })
+            else:
+                log_to_db(bot_id, f"خطا در لاگین: {result}")
+                return jsonify({'error': result}), 500
+        except Exception as e:
+            log_to_db(bot_id, f"خطا در لاگین: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/bot/<bot_id>/submit-code', methods=['POST'])
 def submit_code(bot_id):
@@ -150,27 +154,29 @@ def submit_code(bot_id):
     
     bot_data = app.config['BOT_INSTANCES'][bot_id]
     bot = bot_data['bot']
-    
-    data = request.json or {}
-    code = data.get('code')
-    
-    if not code:
-        return jsonify({'error': 'کد تایید لازم است'}), 400
-    
-    try:
-        result = bot.submit_code(code)
-        if "login_successful" in result:
-            log_to_db(bot_id, "لاگین موفقیت‌آمیز")
-            return jsonify({
-                'status': 'success',
-                'message': 'لاگین موفقیت‌آمیز'
-            })
-        else:
-            log_to_db(bot_id, f"خطا در تأیید کد: {result}")
-            return jsonify({'error': result}), 500
-    except Exception as e:
-        log_to_db(bot_id, f"خطا در تأیید کد: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+    lock = bot_data['lock']
+
+    with lock:
+        data = request.json or {}
+        code = data.get('code')
+
+        if not code:
+            return jsonify({'error': 'کد تایید لازم است'}), 400
+
+        try:
+            result = bot.submit_code(code)
+            if "login_successful" in result:
+                log_to_db(bot_id, "لاگین موفقیت‌آمیز")
+                return jsonify({
+                    'status': 'success',
+                    'message': 'لاگین موفقیت‌آمیز'
+                })
+            else:
+                log_to_db(bot_id, f"خطا در تأیید کد: {result}")
+                return jsonify({'error': result}), 500
+        except Exception as e:
+            log_to_db(bot_id, f"خطا در تأیید کد: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/bot/<bot_id>/send-test', methods=['POST'])
 def send_test_message(bot_id):
@@ -180,28 +186,30 @@ def send_test_message(bot_id):
     
     bot_data = app.config['BOT_INSTANCES'][bot_id]
     bot = bot_data['bot']
-    
-    if not bot.is_logged_in:
-        return jsonify({'error': 'ابتدا لاگین کنید'}), 403
-    
-    data = request.json or {}
-    username = data.get('username', '@test')
-    message = data.get('message', 'تست ربات ایتا')
-    
-    try:
-        success = bot.send_direct_message(username, message)
-        if success:
-            log_to_db(bot_id, f"تست ارسال به {username} موفق بود")
-            return jsonify({
-                'status': 'success', 
-                'message': 'پیام تست ارسال شد'
-            })
-        else:
-            log_to_db(bot_id, f"تست ارسال به {username} ناموفق بود")
-            return jsonify({'error': 'ارسال ناموفق'}), 500
-    except Exception as e:
-        log_to_db(bot_id, f"خطا در تست ارسال: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+    lock = bot_data['lock']
+
+    with lock:
+        if not bot.is_logged_in:
+            return jsonify({'error': 'ابتدا لاگین کنید'}), 403
+
+        data = request.json or {}
+        username = data.get('username', '@test')
+        message = data.get('message', 'تست ربات ایتا')
+
+        try:
+            success = bot.send_direct_message(username, message)
+            if success:
+                log_to_db(bot_id, f"تست ارسال به {username} موفق بود")
+                return jsonify({
+                    'status': 'success',
+                    'message': 'پیام تست ارسال شد'
+                })
+            else:
+                log_to_db(bot_id, f"تست ارسال به {username} ناموفق بود")
+                return jsonify({'error': 'ارسال ناموفق'}), 500
+        except Exception as e:
+            log_to_db(bot_id, f"خطا در تست ارسال: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/bot/<bot_id>/status', methods=['GET'])
 def bot_status(bot_id):
@@ -211,20 +219,22 @@ def bot_status(bot_id):
     
     bot_data = app.config['BOT_INSTANCES'][bot_id]
     bot = bot_data['bot']
-    
-    # جمع‌آوری لاگ‌ها
-    logs = []
-    while not bot_data['log_queue'].empty():
-        logs.append(bot_data['log_queue'].get())
-    
-    # لاگ‌های اخیر از دیتابیس
-    recent_logs = get_recent_logs(bot_id, 10)
-    
-    return jsonify({
-        'is_logged_in': bot.is_logged_in,
-        'session_age': (datetime.now() - bot_data['created_at']).total_seconds(),
-        'logs': logs[-5:] + recent_logs[-5:]  # 5 لاگ از هر دو منبع
-    })
+    lock = bot_data['lock']
+
+    with lock:
+        # جمع‌آوری لاگ‌ها
+        logs = []
+        while not bot_data['log_queue'].empty():
+            logs.append(bot_data['log_queue'].get())
+
+        # لاگ‌های اخیر از دیتابیس
+        recent_logs = get_recent_logs(bot_id, 10)
+
+        return jsonify({
+            'is_logged_in': bot.is_logged_in,
+            'session_age': (datetime.now() - bot_data['created_at']).total_seconds(),
+            'logs': logs[-5:] + recent_logs[-5:]  # 5 لاگ از هر دو منبع
+        })
 
 @app.route('/api/bot/<bot_id>/close', methods=['POST'])
 def close_bot(bot_id):
@@ -234,18 +244,21 @@ def close_bot(bot_id):
     
     bot_data = app.config['BOT_INSTANCES'][bot_id]
     bot = bot_data['bot']
-    bot.close()
-    
-    # حذف از حافظه
-    del app.config['BOT_INSTANCES'][bot_id]
-    
-    # حذف آمار ارسال
-    if bot_id in app.config['SEND_STATS']:
-        del app.config['SEND_STATS'][bot_id]
-    
-    log_to_db(bot_id, "ربات بسته شد")
-    
-    return jsonify({'status': 'success', 'message': 'ربات بسته شد'})
+    lock = bot_data['lock']
+
+    with lock:
+        bot.close()
+
+        # حذف از حافظه
+        del app.config['BOT_INSTANCES'][bot_id]
+
+        # حذف آمار ارسال
+        if bot_id in app.config['SEND_STATS']:
+            del app.config['SEND_STATS'][bot_id]
+
+        log_to_db(bot_id, "ربات بسته شد")
+
+        return jsonify({'status': 'success', 'message': 'ربات بسته شد'})
 
 # ==================== CONTACTS MANAGEMENT ====================
 
@@ -392,10 +405,12 @@ def send_messages(bot_id):
     
     bot_data = app.config['BOT_INSTANCES'][bot_id]
     bot = bot_data['bot']
-    
-    if not bot.is_logged_in:
-        return jsonify({'error': 'ربات لاگین نیست'}), 403
-    
+    lock = bot_data['lock']
+
+    with lock:
+        if not bot.is_logged_in:
+            return jsonify({'error': 'ربات لاگین نیست'}), 403
+
     data = request.json or {}
     message = data.get('message', '')
     send_type = data.get('type', 'excel')
