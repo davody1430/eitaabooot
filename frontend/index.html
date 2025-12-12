@@ -874,8 +874,54 @@
             }
         }
         
+        async function checkSessionStatus() {
+            const statusDiv = document.getElementById('sessionStatus');
+            statusDiv.innerHTML = `
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">در حال بررسی...</span>
+                </div>
+                <p class="mt-2">در حال بررسی وضعیت نشست...</p>`;
+
+            try {
+                await createBot(); // Uses global currentBotId
+                if (!currentBotId) {
+                    throw new Error("Failed to create a bot for session check.");
+                }
+
+                const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/status`);
+                const data = await response.json();
+
+                if (data.is_logged_in) {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            شما در حال حاضر لاگین هستید.
+                        </div>`;
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            شما لاگین نیستید. لطفاً وارد شوید.
+                        </div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle me-2"></i>
+                        خطا در بررسی وضعیت نشست.
+                    </div>`;
+                console.error(error);
+            }
+        }
+
         // بارگذاری اولیه
         document.addEventListener('DOMContentLoaded', function() {
+            checkSessionStatus();
+
+            document.querySelector('a[data-bs-toggle="tab"][href="#login"]').addEventListener('shown.bs.tab', function () {
+                checkSessionStatus();
+            });
+
             // تست اتصال به سرور
             fetch(`${API_BASE_URL}/settings`)
                 .then(response => {
