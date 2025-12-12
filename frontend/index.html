@@ -660,8 +660,7 @@
     <script>
         const API_BASE_URL = 'http://localhost:5000/api';
         let currentBotId = null;
-        let isSending = false;
-        let sendStats = { total: 0, sent: 0, success: 0, error: 0 };
+        let progressInterval = null;
         
         // توابع عمومی
         function showTab(tabId) {
@@ -926,7 +925,6 @@
                         return;
                     }
 
-                    // 1. Upload the file
                     const formData = new FormData();
                     formData.append('file', excelFile);
                     const uploadResponse = await fetch(`${API_BASE_URL}/contacts/upload`, {
@@ -951,7 +949,6 @@
                     }
                 }
 
-                // 2. Start the sending process
                 const sendResponse = await fetch(`${API_BASE_URL}/bot/${currentBotId}/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -962,8 +959,7 @@
                 if (sendResponse.ok) {
                     showNotification(`ارسال به ${sendResult.total} کاربر شروع شد.`, 'success');
                     addToLog(`عملیات ارسال برای ${sendResult.total} کاربر در پس‌زمینه شروع شد.`, 'success');
-                    // Note: Progress tracking would require a more complex setup (e.g., websockets or polling)
-                    // For now, we just indicate it has started.
+                    progressInterval = setInterval(updateSendProgress, 3000);
                 } else {
                     throw new Error(sendResult.error || 'خطا در شروع عملیات ارسال');
                 }
@@ -976,13 +972,55 @@
             }
         }
         
-        function stopSending() {
-            if (confirm('آیا می‌خواهید ارسال را متوقف کنید؟')) {
-                isSending = false;
+        async function updateSendProgress() {
+            if (!currentBotId) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/send/status`);
+                const stats = await response.json();
+
+                if (response.ok) {
+                    const percent = stats.total > 0 ? (stats.sent / stats.total) * 100 : 0;
+                    document.getElementById('progressBar').style.width = `${percent}%`;
+                    document.getElementById('progressText').textContent = `${Math.round(percent)}%`;
+                    document.getElementById('sentCount').textContent = stats.sent;
+                    document.getElementById('successCount').textContent = stats.success;
+                    document.getElementById('errorCount').textContent = stats.error;
+                    document.getElementById('remainingCount').textContent = stats.total - stats.sent;
+
+                    if (!stats.is_running) {
+                        clearInterval(progressInterval);
+                        progressInterval = null;
+                        document.getElementById('sendBtn').disabled = false;
+                        document.getElementById('stopBtn').disabled = true;
+                        addToLog('ارسال پیام‌ها به پایان رسید.', 'success');
+                    }
+                } else {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+                console.error('Error fetching send status:', error);
+            }
+        }
+
+        async function stopSending() {
+            if (!currentBotId) return;
+
+            try {
+                await fetch(`${API_BASE_URL}/bot/${currentBotId}/send/stop`, { method: 'POST' });
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
                 document.getElementById('sendBtn').disabled = false;
                 document.getElementById('stopBtn').disabled = true;
                 showNotification('ارسال متوقف شد', 'warning');
                 addToLog('ارسال توسط کاربر متوقف شد', 'warning');
+            } catch (error) {
+                showNotification('خطا در توقف ارسال', 'error');
             }
         }
         
