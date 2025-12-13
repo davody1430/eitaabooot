@@ -195,46 +195,53 @@ class EitaaBot:
             self._log(f"ERROR reading Excel file: {e}")
             return []
     
-    def extract_usernames_from_group_message(self, group_name, message_prefix):
+    def extract_mentions_from_group(self, group_name, message_prefix):
         if not self.is_logged_in:
-            self._log("Cannot extract usernames, not logged in.")
+            self._log("امکان استخراج نام‌های کاربری وجود ندارد، لطفاً ابتدا وارد شوید.")
             return []
 
         try:
-            self._log(f"Searching for group: {group_name}")
+            self._log(f"در حال جستجو برای گروه: {group_name}")
             search_box = self.page.locator(self.selectors['search_box'])
             search_box.fill(group_name)
             self._wait_random_delay()
 
-            self._log(f"Clicking on group '{group_name}' in chat list.")
-            group_in_list = self.page.locator(f"{self.selectors['chat_list_item']}:has-text('{group_name}')")
+            self._log(f"در حال کلیک روی گروه '{group_name}' در لیست گفتگوها.")
+            group_in_list = self.page.locator(f"li.chatlist-chat:has-text('{group_name}')")
             group_in_list.first.click()
-            self.page.wait_for_load_state('networkidle')
 
-            self._log(f"Searching for message with prefix: '{message_prefix}'")
+            self._log("در حال انتظار برای بارگذاری کامل صفحه گروه...")
+            self.page.wait_for_timeout(5000)
+            self.page.wait_for_load_state('networkidle')
+            self.page.screenshot(path='group_page_after_load.png')
+
+            self._log(f"در حال جستجو برای پیام با پیشوند: '{message_prefix}'")
             normalized_prefix = normalize_persian_text(message_prefix)
-            message_bubbles = self.page.locator(self.selectors['message_bubble'])
+            # از انتخابگر جدید برای حباب‌های پیام استفاده می‌کنیم
+            message_bubbles = self.page.locator('div.bubble .message')
 
             count = message_bubbles.count()
-            self._log(f"Found {count} message bubbles. Iterating to find the target message...")
+            self._log(f"تعداد {count} حباب پیام پیدا شد. در حال بررسی برای یافتن پیام مورد نظر...")
             for i in range(count - 1, -1, -1):
                 bubble = message_bubbles.nth(i)
-                message_text_element = bubble.locator(self.selectors['message_text'])
-                if message_text_element.count() > 0:
-                    text_content = message_text_element.inner_text()
-                    if normalize_persian_text(text_content).startswith(normalized_prefix):
-                        self._log("Found the target message. Extracting usernames...")
-                        usernames = extract_usernames_from_text(text_content)
-                        self._log(f"Extracted {len(usernames)} usernames.")
-                        return usernames
+                text_content = bubble.inner_text()
 
-            self._log("Target message with the specified prefix was not found.")
+                if normalize_persian_text(text_content).startswith(normalized_prefix):
+                    self._log("پیام مورد نظر پیدا شد. در حال استخراج منشن‌ها...")
+                    # به جای استخراج از متن، مستقیماً تگ‌های a.mention را پیدا می‌کنیم
+                    mentions = bubble.locator('a.mention').all()
+                    usernames = [mention.inner_text() for mention in mentions]
+
+                    self._log(f"تعداد {len(usernames)} نام کاربری استخراج شد: {', '.join(usernames)}")
+                    return usernames
+
+            self._log("پیامی با پیشوند مشخص شده پیدا نشد.")
             return []
 
         except Exception as e:
-            self._log(f"ERROR extracting usernames from group: {e}")
+            self._log(f"خطا در استخراج نام‌های کاربری از گروه: {e}")
             if self.page:
-                self.page.screenshot(path='extract_usernames_error.png')
+                self.page.screenshot(path='extract_mentions_error.png')
             return []
 
     def confirm_login(self):

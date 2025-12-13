@@ -447,7 +447,7 @@ def send_messages(bot_id):
         message_prefix = data.get('message_prefix', '')
         
         if group_name and message_prefix:
-            usernames = bot.extract_usernames_from_group_message(group_name, message_prefix)
+            usernames = bot.extract_mentions_from_group(group_name, message_prefix)
         else:
             usernames = ['@group_user1', '@group_user2', '@group_user3']
     
