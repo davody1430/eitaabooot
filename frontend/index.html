@@ -752,18 +752,12 @@
                                 
                                 <div id="codeEntrySection" class="mt-4" style="display: none;">
                                     <hr>
-                                    <h5 class="section-title">مرحله ۲: ورود کد تأیید</h5>
-                                    <p class="mb-3">کد ۵ رقمی ارسال شده به ایتا را وارد کنید:</p>
-                                    <div class="input-group mb-3">
-                                        <input type="text" id="verificationCode" class="form-control text-center" 
-                                               placeholder="12345" dir="ltr" maxlength="5" style="font-size: 18px; letter-spacing: 5px;">
-                                        <button class="btn btn-success" onclick="submitCode()" id="submitCodeBtn">
-                                            <i class="fas fa-check me-2"></i>ثبت کد
+                                    <h5 class="section-title">مرحله ۲: تأیید ورود دستی</h5>
+                                    <p class="mb-3"><b>مهم:</b> پس از اینکه کد را در پنجره مرورگر باز شده وارد کردید و با موفقیت وارد حساب خود شدید، روی دکمه زیر کلیک کنید تا ورود شما در سیستم ثبت شود.</p>
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-success btn-lg" onclick="submitCode()" id="submitCodeBtn">
+                                            <i class="fas fa-check-double me-2"></i>ورود دستی را تأیید می‌کنم
                                         </button>
-                                    </div>
-                                    <div class="alert alert-light">
-                                        <i class="fas fa-clock me-2"></i>
-                                        <span>کد تأیید به مدت 2 دقیقه معتبر است</span>
                                     </div>
                                 </div>
                                 
@@ -1470,52 +1464,46 @@
         }
         
         async function submitCode() {
-            const code = document.getElementById('verificationCode').value.trim();
-            
-            if (!code || code.length !== 5) {
-                showNotification('کد تأیید باید ۵ رقمی باشد', 'error');
-                return;
-            }
-            
             if (!currentBotId) {
-                showNotification('ربات فعالی وجود ندارد', 'error');
+                showNotification('ربات فعالی وجود ندارد، لطفاً ابتدا شماره تلفن را وارد کنید.', 'error');
                 return;
             }
             
             const submitBtn = document.getElementById('submitCodeBtn');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="loading"></span> در حال تأیید...';
+            submitBtn.innerHTML = '<span class="loading"></span> در حال تأیید ورود شما...';
             
             try {
+                // پارامتر کد دیگر اهمیتی ندارد، اما API منتظر آن است
                 const response = await fetch(`${API_BASE_URL}/bot/${currentBotId}/submit-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code: code })
+                    body: JSON.stringify({ code: "manual" }) // یک مقدار ساختگی ارسال می‌شود
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok && data.status === 'success') {
-                    showNotification('لاگین با موفقیت انجام شد!', 'success');
+                    showNotification('ورود شما با موفقیت تأیید شد!', 'success');
                     document.getElementById('codeEntrySection').style.display = 'none';
-                    document.getElementById('verificationCode').value = '';
                     document.getElementById('loginStatus').innerHTML = `
                         <div class="alert alert-success mt-3">
                             <i class="fas fa-check-circle me-2"></i>
-                            لاگین موفقیت‌آمیز! اکنون می‌توانید ارسال را شروع کنید.
+                            ورود موفقیت‌آمیز! اکنون می‌توانید ارسال را شروع کنید.
                         </div>
                     `;
                     updateLoginStatus(true);
-                    addToLog('لاگین موفقیت‌آمیز', 'success');
+                    addToLog('ورود دستی با موفقیت تأیید شد', 'success');
                 } else {
-                    showNotification(data.error || 'کد تأیید نامعتبر است', 'error');
+                    showNotification(data.error || 'تأیید ورود ناموفق بود. آیا در مرورگر وارد شده‌اید؟', 'error');
+                    addToLog(data.error || 'خطا در تأیید ورود دستی', 'error');
                 }
             } catch (error) {
-                showNotification('خطا در ارتباط با سرور', 'error');
+                showNotification('خطا در ارتباط با سرور هنگام تأیید ورود.', 'error');
                 console.error('خطا در تأیید کد:', error);
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-check me-2"></i>ثبت کد';
+                submitBtn.innerHTML = '<i class="fas fa-check-double me-2"></i>ورود دستی را تأیید می‌کنم';
             }
         }
         
