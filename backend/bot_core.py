@@ -209,35 +209,32 @@ class EitaaBot:
             self._log(f"در حال کلیک روی گروه '{group_name}' در لیست گفتگوها.")
             group_in_list = self.page.locator(f"li.chatlist-chat:has-text('{group_name}')")
             group_in_list.first.click()
+            self.page.wait_for_timeout(2000)
 
-            self._log("در حال انتظار برای بارگذاری کامل صفحه گروه...")
-            self.page.wait_for_timeout(5000)
-            self.page.wait_for_load_state('networkidle')
-            self.page.screenshot(path='group_page_after_load.png')
+            self._log("در حال کلیک روی دکمه جستجو در گروه...")
+            search_button_selector = "#column-center > div > div > div.sidebar-header.topbar > div.chat-utils > button.btn-icon.tgico-search.rp"
+            self.page.locator(search_button_selector).click()
+            self.page.wait_for_timeout(1000)
 
-            self._log(f"در حال جستجو برای پیام با پیشوند: '{message_prefix}'")
-            normalized_prefix = normalize_persian_text(message_prefix)
+            self._log(f"در حال وارد کردن پیشوند پیام: '{message_prefix}'")
+            search_input_selector = "#search-private-container .input-search-input"
+            self.page.locator(search_input_selector).fill(message_prefix)
+            self.page.wait_for_timeout(3000)
 
-            # حلقه اسکرول برای بارگذاری تاریخچه
-            for _ in range(5): # 5 بار اسکرول به بالا
-                self.page.evaluate("document.querySelector('.scrollable-y').scrollTop = 0")
-                self.page.wait_for_timeout(2000)
+            self._log("در حال کلیک روی اولین نتیجه جستجو...")
+            search_result_selector = "#search-private-container > div.sidebar-content > div > div > div > ul > li"
+            self.page.locator(search_result_selector).first.click()
+            self.page.wait_for_timeout(3000)
 
-            # از انتخابگر جدید برای حباب‌های پیام استفاده می‌کنیم
-            message_bubbles = self.page.locator('div.bubble .message')
+            self._log("در حال استخراج منشن‌ها از پیام یافت شده...")
+            message_selector = "div.bubble-content div.message"
+            message_elements = self.page.locator(message_selector).all()
 
-            count = message_bubbles.count()
-            self._log(f"تعداد {count} حباب پیام پیدا شد. در حال بررسی برای یافتن پیام مورد نظر...")
-            for i in range(count - 1, -1, -1):
-                bubble = message_bubbles.nth(i)
-                text_content = bubble.inner_text()
-
-                if normalize_persian_text(text_content).startswith(normalized_prefix):
-                    self._log("پیام مورد نظر پیدا شد. در حال استخراج منشن‌ها...")
-                    # به جای استخراج از متن، مستقیماً تگ‌های a.mention را پیدا می‌کنیم
-                    mentions = bubble.locator('a.mention').all()
+            for el in reversed(message_elements):
+                text_content = el.inner_text()
+                if normalize_persian_text(text_content).startswith(normalize_persian_text(message_prefix)):
+                    mentions = el.locator('a.mention').all()
                     usernames = [mention.inner_text() for mention in mentions]
-
                     self._log(f"تعداد {len(usernames)} نام کاربری استخراج شد: {', '.join(usernames)}")
                     return usernames
 
