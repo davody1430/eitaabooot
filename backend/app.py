@@ -156,6 +156,10 @@ def submit_code(bot_id):
     bot = bot_data['bot']
     lock = bot_data['lock']
 
+    # اطمینان از مقداردهی اولیه ربات
+    if not bot or not bot.page:
+        return jsonify({'error': 'نمونه ربات به درستی مقداردهی اولیه نشده است. لطفاً دوباره تلاش کنید.'}), 500
+
     with lock:
         data = request.json or {}
         code = data.get('code')
