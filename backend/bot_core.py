@@ -110,28 +110,32 @@ class EitaaBot:
     def submit_code(self, code):
         try:
             if not self.page:
-                self._log("ERROR: Page not initialized before submitting code.")
+                self._log("خطا: صفحه مرورگر مقداردهی اولیه نشده است.")
                 return "error: page_not_initialized"
 
-            self._log(f"Submitting verification code: {code}")
-            code_input = self.page.locator(self.selectors['code_input'])
-            code_input.fill(code)
-            code_input.press('Enter') 
+            self._log("در حال تأیید وضعیت ورود...")
+            self._log("این تابع پس از آن فراخوانی شده که شما کد را دستی وارد کرده و دکمه تأیید را در برنامه زده‌اید.")
 
-            self._log("Waiting for main page to load after code submission...")
-            self.page.wait_for_selector(self.selectors['search_box'], timeout=60000)
-            
+            # با یک زمان کوتاه، بررسی می‌کنیم که آیا ورود موفقیت‌آمیز بوده یا خیر
+            # چون کاربر باید قبلاً به صورت دستی وارد شده باشد
+            self.page.wait_for_selector(self.selectors['search_box'], timeout=15000) # زمان انتظار را کمی بیشتر کردم
+
             self.is_logged_in = True
-            self._log("Login successful. Saving session state.")
-            
+            self._log("✅ ورود موفقیت‌آمیز تأیید شد. در حال ذخیره نشست...")
+
             storage = self.context.storage_state()
             with open(self.session_file, 'w') as f:
                 json.dump(storage, f)
-            
+
             return "login_successful"
-        
+
+        except PlaywrightTimeoutError:
+            self._log("❌ خطا: ورود موفقیت‌آمیز تأیید نشد. لطفاً ابتدا در پنجره مرورگر باز شده وارد شوید و سپس دکمه تأیید را بزنید.")
+            if self.page:
+                self.page.screenshot(path='submit_code_verification_error.png')
+            return "error: login_not_verified"
         except Exception as e:
-            self._log(f"ERROR during code submission: {e}")
+            self._log(f"❌ خطا در هنگام تأیید ورود: {e}")
             if self.page:
                 self.page.screenshot(path='submit_code_error.png')
             return f"error: {e}"
