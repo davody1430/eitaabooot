@@ -95,10 +95,12 @@ class EitaaBot:
             phone_input.press('Enter')
             
             self._log("Waiting for verification code input field...")
-            code_input = self.page.locator(self.selectors['code_input'])
-            code_input.wait_for(timeout=30000)
+            # ما منتظر فیلد کد می‌مانیم تا مطمئن شویم صفحه بارگذاری شده
+            # اما کاربر خودش کد را وارد می‌کند
+            code_input_visible = self.page.locator(self.selectors['code_input'])
+            code_input_visible.wait_for(timeout=30000)
             
-            self._log("Ready to receive verification code.")
+            self._log("Ready for manual code entry.")
             return "waiting_for_code"
 
         except Exception as e:
@@ -118,10 +120,10 @@ class EitaaBot:
 
             # با یک زمان کوتاه، بررسی می‌کنیم که آیا ورود موفقیت‌آمیز بوده یا خیر
             # چون کاربر باید قبلاً به صورت دستی وارد شده باشد
-            self.page.wait_for_selector(self.selectors['search_box'], timeout=5000)
+            self.page.wait_for_selector(self.selectors['search_box'], timeout=15000) # زمان انتظار را کمی بیشتر کردم
 
             self.is_logged_in = True
-            self._log("ورود موفقیت‌آمیز تأیید شد. در حال ذخیره نشست...")
+            self._log("✅ ورود موفقیت‌آمیز تأیید شد. در حال ذخیره نشست...")
 
             storage = self.context.storage_state()
             with open(self.session_file, 'w') as f:
@@ -130,12 +132,12 @@ class EitaaBot:
             return "login_successful"
 
         except PlaywrightTimeoutError:
-            self._log("خطا: ورود موفقیت‌آمیز تأیید نشد. لطفاً ابتدا در پنجره مرورگر باز شده وارد شوید و سپس دکمه تأیید را بزنید.")
+            self._log("❌ خطا: ورود موفقیت‌آمیز تأیید نشد. لطفاً ابتدا در پنجره مرورگر باز شده وارد شوید و سپس دکمه تأیید را بزنید.")
             if self.page:
                 self.page.screenshot(path='submit_code_verification_error.png')
             return "error: login_not_verified"
         except Exception as e:
-            self._log(f"خطا در هنگام تأیید ورود: {e}")
+            self._log(f"❌ خطا در هنگام تأیید ورود: {e}")
             if self.page:
                 self.page.screenshot(path='submit_code_error.png')
             return f"error: {e}"
