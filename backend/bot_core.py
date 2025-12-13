@@ -215,6 +215,12 @@ class EitaaBot:
 
             self._log(f"در حال جستجو برای پیام با پیشوند: '{message_prefix}'")
             normalized_prefix = normalize_persian_text(message_prefix)
+
+            # حلقه اسکرول برای بارگذاری تاریخچه
+            for _ in range(5): # 5 بار اسکرول به بالا
+                self.page.evaluate("document.querySelector('.scrollable-y').scrollTop = 0")
+                self.page.wait_for_timeout(2000)
+
             # از انتخابگر جدید برای حباب‌های پیام استفاده می‌کنیم
             message_bubbles = self.page.locator('div.bubble .message')
 
