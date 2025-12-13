@@ -228,6 +228,12 @@ class EitaaBot:
             message_selector = "div.bubble-content div.message"
             message_elements = self.page.locator(message_selector).all()
 
+            # Log all message bubble HTMLs
+            for i, el in enumerate(message_elements):
+                self._log(f"--- HTML پیام شماره {i} ---")
+                self._log(el.inner_html())
+                self._log("--------------------------")
+
             for el in reversed(message_elements):
                 text_content = el.inner_text()
                 if normalize_persian_text(text_content).startswith(normalize_persian_text(message_prefix)):
