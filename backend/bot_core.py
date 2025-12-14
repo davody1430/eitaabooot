@@ -274,68 +274,70 @@ class EitaaBot:
             self.page.wait_for_timeout(3000)  # Wait for search results
 
             self._log("۱.۳: در حال پیدا کردن گروه در نتایج...")
-            group_item_selector = f'li.rp.chatlist-chat:has(span.peer-title:has-text("{group_name}"))'
+            # نرمال‌سازی نام گروه برای تطابق دقیق‌تر
+            normalized_group_name = normalize_persian_text(group_name)
+            group_item_selector = f'li.rp.chatlist-chat:has(span.peer-title:has-text("{normalized_group_name}"))'
             group_chat_element = self.page.locator(group_item_selector).first
             group_chat_element.wait_for(state='visible', timeout=15000)
             group_chat_element.click(timeout=10000)
             self._log(f"✅ گروه '{group_name}' با موفقیت باز شد.")
             self.page.wait_for_timeout(3000) # Wait for group messages to load
 
-            # --- مرحله ۲: پیدا کردن پیام هدف در گروه ---
-            self._log("\n--- شروع مرحله ۲: پیدا کردن پیام هدف در گروه ---")
+            # --- مرحله ۲: استفاده از جستجوی داخلی گروه برای پیدا کردن پیام ---
+            self._log("\n--- شروع مرحله ۲: جستجوی پیام با پیشوند در گروه ---")
             target_message_text = None
             try:
-                message_bubble_selector = "div.bubble"
-                message_text_in_bubble_selector = "div.message"
+                # ۲.۱: کلیک روی دکمه جستجو در داخل گروه
+                self._log("۲.۱: کلیک روی دکمه جستجو در هدر گروه...")
+                group_search_button = self.page.locator("button.btn-icon.tgico-search.rp").first
+                group_search_button.wait_for(state='visible', timeout=10000)
+                group_search_button.click()
+                self._log("   دکمه جستجوی گروه کلیک شد.")
 
-                # اسکرول به بالا برای بارگذاری پیام‌های قدیمی‌تر
-                self._log("۲.۱: در حال اسکرول به بالای صفحه برای بارگذاری پیام‌ها...")
-                chat_scrollable_area_locator = self.page.locator('//div[contains(@class, "bubbles-scroller")]/div[contains(@class, "scrollable-y")]').first
-                if chat_scrollable_area_locator.count() > 0:
-                    for i in range(3):  # اسکرول چندباره برای اطمینان
-                        self._log(f"   اسکرول به بالا (تلاش {i+1}/3)...")
-                        chat_scrollable_area_locator.evaluate("el => el.scrollTop = 0")
-                        self.page.wait_for_timeout(2000)
+                # ۲.۲: وارد کردن پیشوند پیام در کادر جستجو
+                self._log(f"۲.۲: وارد کردن پیشوند '{message_prefix}' در کادر جستجو...")
+                # این کادر جستجو پس از کلیک روی دکمه بالا ظاهر می‌شود
+                internal_search_input = self.page.locator('input.input-search-input[placeholder="جستجو در این گفتگو"]').first
+                internal_search_input.wait_for(state='visible', timeout=10000)
+                internal_search_input.fill(message_prefix)
+                self.page.wait_for_timeout(3000) # انتظار برای بارگذاری نتایج
+                self._log("   پیشوند با موفقیت وارد شد.")
 
-                # پیدا کردن همه حباب‌های پیام
-                all_message_bubbles = self.page.locator(message_bubble_selector)
-                count = all_message_bubbles.count()
-                self._log(f"۲.۲: تعداد {count} حباب پیام در گروه یافت شد. در حال بررسی از آخر...")
+                # ۲.۳: پیدا کردن و کلیک روی نتیجه جستجو
+                self._log("۲.۳: در حال بررسی نتایج جستجو...")
+                search_results_container = self.page.locator("div.search-results-container")
+                search_results_container.wait_for(state='visible', timeout=15000)
 
-                if count == 0:
-                     self._log("   هیچ پیامی در گروه یافت نشد. ممکن است گروه خالی باشد یا هنوز بارگذاری نشده باشد.")
-                     self.page.screenshot(path='debug_no_messages_found.png')
+                # انتخاب اولین نتیجه که معمولاً جدیدترین است
+                first_result_locator = search_results_container.locator("li.chatlist-chat").first
+                if first_result_locator.count() == 0:
+                    self._log(f"⚠️ هیچ پیامی با پیشوند '{message_prefix}' در نتایج جستجو پیدا نشد.")
+                    self.page.screenshot(path='debug_search_no_results.png')
+                    return []
 
+                self._log("   اولین نتیجه جستجو پیدا شد. در حال استخراج متن...")
+                # استخراج متن کامل از حباب پیام هایلایت شده
+                # پس از کلیک روی نتیجه، پیام در چت اصلی هایلایت می‌شود
+                first_result_locator.click()
+                self.page.wait_for_timeout(2000) # منتظر می‌مانیم تا به پیام اسکرول شود
 
-                # حلقه برای پیدا کردن پیام
-                for i in range(count - 1, -1, -1):
-                    single_bubble_locator = all_message_bubbles.nth(i)
-                    # اسکرول به پیام برای اینکه قابل مشاهده باشد
-                    try:
-                        single_bubble_locator.scroll_into_view_if_needed(timeout=1000)
-                    except:
-                        pass
+                highlighted_message_bubble = self.page.locator("div.bubble.is-selected")
+                highlighted_message_bubble.wait_for(state='visible', timeout=10000)
 
-                    message_text_locator = single_bubble_locator.locator(message_text_in_bubble_selector)
-                    if message_text_locator.count() > 0:
-                        try:
-                            text_content = message_text_locator.inner_text(timeout=3000)
-                            text_to_check = normalize_persian_text(text_content.strip() if text_content else "")
-                            prefix_to_check = normalize_persian_text(message_prefix)
+                message_text_locator = highlighted_message_bubble.locator("div.message")
+                target_message_text = message_text_locator.inner_text(timeout=5000)
 
-                            if text_to_check and prefix_to_check and text_to_check.startswith(prefix_to_check):
-                                target_message_text = text_content.strip()
-                                self._log(f"🎯 پیام هدف پیدا شد: '{target_message_text[:50]}...'")
-                                break # از حلقه خارج شو
-                        except Exception as e_inner:
-                            self._log(f"   (خطای جزئی در خواندن متن پیام شماره {i}: {e_inner})")
-                            pass
+                if target_message_text:
+                    self._log(f"🎯 پیام هدف از طریق جستجو پیدا شد: '{target_message_text[:50]}...'")
+                else:
+                    self._log("   نتوانستم متن پیام هایلایت شده را استخراج کنم.")
+                    self.page.screenshot(path='debug_highlighted_message_error.png')
+                    return []
 
-                if not target_message_text:
-                    self._log(f"⚠️ پیام با پیشوند '{message_prefix}' در گروه '{group_name}' پیدا نشد.")
-                    self.page.screenshot(path='debug_message_not_found.png')
-                    return [] # بازگشت لیست خالی چون پیام پیدا نشد
-
+            except PlaywrightTimeoutError:
+                self._log(f"❌ خطای تایم اوت در حین جستجوی پیام در گروه. ممکن است دکمه جستجو، کادر ورودی یا نتایج پیدا نشده باشند.")
+                self.page.screenshot(path='debug_internal_search_timeout_error.png')
+                return []
             except Exception as e_find_msg:
                 self._log(f"❌ خطایی در هنگام جستجوی پیام هدف در گروه '{group_name}' رخ داد: {e_find_msg}")
                 self.page.screenshot(path='debug_find_message_error.png')
