@@ -254,192 +254,120 @@ class EitaaBot:
             return []
     
     def extract_mentions_from_group(self, group_name, message_prefix):
-        """
-        نسخه جدید: استفاده از منطق ساده‌تر و سلکتورهای مطمئن‌تر
-        """
         if not self.is_logged_in:
             self._log("❌ امکان استخراج نام‌های کاربری وجود ندارد، لطفاً ابتدا وارد شوید.")
             return []
 
         try:
             self._log(f"🔍 شروع عملیات برای گروه: {group_name}")
-            
-            # --- مرحله ۱: باز کردن جستجو و جستجوی گروه ---
-            self._log("۱. باز کردن جستجو...")
-            
-            # روش ۱: کلیک روی دکمه جستجو
-            try:
-                search_button = self.page.locator(".tgico-search, .icon-search, button[aria-label='جستجو']").first
-                if search_button.is_visible():
-                    search_button.click()
-                    self.page.wait_for_timeout(1000)
-            except:
-                pass
-            
-            # پیدا کردن فیلد جستجو
-            search_selector = "input.input-search-input, input[placeholder*='جستجو'], input[type='search']"
-            search_input = self.page.locator(search_selector).first
-            
-            if not search_input.is_visible():
-                self._log("❌ فیلد جستجو پیدا نشد")
-                return []
-            
-            # پاک کردن و وارد کردن نام گروه
-            self._log(f"۲. جستجوی گروه: {group_name}")
-            search_input.click()
+
+            # --- مرحله ۱: جستجو و باز کردن گروه ---
+            self._log("۱.۱: در حال پیدا کردن و پاک کردن کادر جستجو...")
+            search_input = self.page.locator(self.selectors['search_box'])
+            search_input.wait_for(timeout=10000)
+            search_input.click(timeout=5000)
             search_input.fill("")
             self.page.wait_for_timeout(500)
+
+            self._log(f"۱.۲: در حال جستجوی گروه '{group_name}'...")
             search_input.fill(group_name)
-            self.page.wait_for_timeout(3000)
-            
-            # --- مرحله ۲: پیدا کردن و کلیک روی گروه ---
-            self._log("۳. پیدا کردن گروه در نتایج...")
-            
-            # روش ۱: استفاده از سلکتور عمومی‌تر
-            group_selectors = [
-                f"li.chatlist-chat:has-text('{group_name}')",
-                f"li.rp:has-text('{group_name}')",
-                f"li:has-text('{group_name}')"
-            ]
-            
-            group_element = None
-            for selector in group_selectors:
-                try:
-                    element = self.page.locator(selector).first
-                    if element.is_visible(timeout=2000):
-                        group_element = element
-                        break
-                except:
-                    continue
-            
-            if not group_element:
-                self._log(f"❌ گروه '{group_name}' در نتایج جستجو پیدا نشد")
-                # عکس بگیریم برای دیباگ
-                self.page.screenshot(path="debug_group_not_found.png")
-                return []
-            
-            self._log("۴. کلیک روی گروه...")
-            group_element.click()
-            self.page.wait_for_timeout(2000)
-            
-            # --- مرحله ۳: انتظار برای بارگذاری صفحه گروه ---
-            self._log("۵. منتظر بارگذاری صفحه گروه...")
-            
-            # چندین نشانگر برای اطمینان از بارگذاری گروه
-            group_indicators = [
-                "div.chat-info",
-                "div.bubbles-scroller",
-                "div.chat-input",
-                "div.input-message-input"
-            ]
-            
-            for indicator in group_indicators:
-                try:
-                    self.page.wait_for_selector(indicator, timeout=5000)
-                    break
-                except:
-                    continue
-            
-            self._log(f"✅ گروه '{group_name}' با موفقیت باز شد")
-            
-            # --- مرحله ۴: جستجوی پیام با پیشوند مشخص ---
-            self._log(f"۶. جستجوی پیام با پیشوند: {message_prefix}")
-            
-            # اسکرول به بالا
-            self._log("۷. اسکرول به بالا برای دیدن پیام‌های بیشتر...")
-            try:
-                # تلاش برای اسکرول
-                self.page.evaluate("window.scrollTo(0, 0)")
-                self.page.wait_for_timeout(2000)
-                
-                # اسکرول مجدد برای اطمینان
-                self.page.evaluate("""
-                    const scrollContainer = document.querySelector('.bubbles-scroller, .scrollable-y, .bubbles');
-                    if (scrollContainer) scrollContainer.scrollTop = 0;
-                """)
-                self.page.wait_for_timeout(2000)
-            except:
-                pass
-            
-            # جستجوی پیام‌ها
+            self.page.wait_for_timeout(3000)  # Wait for search results
+
+            self._log("۱.۳: در حال پیدا کردن گروه در نتایج...")
+            group_item_selector = f'li.rp.chatlist-chat:has(span.peer-title:has-text("{group_name}"))'
+            group_chat_element = self.page.locator(group_item_selector).first
+            group_chat_element.wait_for(state='visible', timeout=15000)
+            group_chat_element.click(timeout=10000)
+            self._log(f"✅ گروه '{group_name}' با موفقیت باز شد.")
+            self.page.wait_for_timeout(3000) # Wait for group messages to load
+
+            # --- مرحله ۲: پیدا کردن پیام هدف در گروه ---
+            self._log("\n--- شروع مرحله ۲: پیدا کردن پیام هدف در گروه ---")
             target_message_text = None
-            
-            # چندین سلکتور ممکن برای پیام‌ها
-            message_selectors = [
-                "div.bubble",
-                "div.message",
-                "div.bubble-content",
-                "div.text-content"
-            ]
-            
-            for msg_selector in message_selectors:
-                try:
-                    messages = self.page.locator(msg_selector)
-                    count = messages.count()
-                    
-                    if count > 0:
-                        self._log(f"   پیدا شد {count} پیام با سلکتور {msg_selector}")
-                        
-                        # بررسی از آخرین پیام
-                        for i in range(count - 1, -1, -1):
-                            try:
-                                msg = messages.nth(i)
-                                text = msg.inner_text(timeout=1000)
-                                
-                                if text:
-                                    clean_text = normalize_persian_text(text.strip())
-                                    clean_prefix = normalize_persian_text(message_prefix.strip())
-                                    
-                                    if clean_text and clean_prefix and clean_text.startswith(clean_prefix):
-                                        target_message_text = text.strip()
-                                        self._log(f"🎯 پیام هدف پیدا شد: '{target_message_text[:50]}...'")
-                                        break
-                            except:
-                                continue
-                        
-                        if target_message_text:
-                            break
-                except:
-                    continue
-            
-            if not target_message_text:
-                self._log(f"⚠️ پیام با پیشوند '{message_prefix}' پیدا نشد")
-                # عکس برای دیباگ
-                self.page.screenshot(path="debug_message_not_found.png")
-                return []
-            
-            # --- مرحله ۵: استخراج نام‌های کاربری ---
-            self._log("۸. استخراج نام‌های کاربری از پیام...")
-            usernames = extract_usernames_from_text(target_message_text)
-            
-            if not usernames:
-                self._log("⚠️ هیچ نام کاربری (@username) در پیام پیدا نشد")
-                return []
-            
-            self._log(f"✅ {len(usernames)} نام کاربری استخراج شد: {', '.join(usernames[:5])}...")
-            
-            # --- مرحله ۶: بازگشت به صفحه اصلی ---
-            self._log("۹. بازگشت به صفحه اصلی...")
             try:
-                # بستن صفحه گروه با کلیک روی جستجو
-                search_input.click()
-                search_input.fill("")
-                self.page.wait_for_timeout(1000)
-            except:
-                pass
-            
-            return usernames
-            
+                message_bubble_selector = "div.bubble"
+                message_text_in_bubble_selector = "div.message"
+
+                # اسکرول به بالا برای بارگذاری پیام‌های قدیمی‌تر
+                self._log("۲.۱: در حال اسکرول به بالای صفحه برای بارگذاری پیام‌ها...")
+                chat_scrollable_area_locator = self.page.locator('//div[contains(@class, "bubbles-scroller")]/div[contains(@class, "scrollable-y")]').first
+                if chat_scrollable_area_locator.count() > 0:
+                    for i in range(3):  # اسکرول چندباره برای اطمینان
+                        self._log(f"   اسکرول به بالا (تلاش {i+1}/3)...")
+                        chat_scrollable_area_locator.evaluate("el => el.scrollTop = 0")
+                        self.page.wait_for_timeout(2000)
+
+                # پیدا کردن همه حباب‌های پیام
+                all_message_bubbles = self.page.locator(message_bubble_selector)
+                count = all_message_bubbles.count()
+                self._log(f"۲.۲: تعداد {count} حباب پیام در گروه یافت شد. در حال بررسی از آخر...")
+
+                if count == 0:
+                     self._log("   هیچ پیامی در گروه یافت نشد. ممکن است گروه خالی باشد یا هنوز بارگذاری نشده باشد.")
+                     self.page.screenshot(path='debug_no_messages_found.png')
+
+
+                # حلقه برای پیدا کردن پیام
+                for i in range(count - 1, -1, -1):
+                    single_bubble_locator = all_message_bubbles.nth(i)
+                    # اسکرول به پیام برای اینکه قابل مشاهده باشد
+                    try:
+                        single_bubble_locator.scroll_into_view_if_needed(timeout=1000)
+                    except:
+                        pass
+
+                    message_text_locator = single_bubble_locator.locator(message_text_in_bubble_selector)
+                    if message_text_locator.count() > 0:
+                        try:
+                            text_content = message_text_locator.inner_text(timeout=3000)
+                            text_to_check = normalize_persian_text(text_content.strip() if text_content else "")
+                            prefix_to_check = normalize_persian_text(message_prefix)
+
+                            if text_to_check and prefix_to_check and text_to_check.startswith(prefix_to_check):
+                                target_message_text = text_content.strip()
+                                self._log(f"🎯 پیام هدف پیدا شد: '{target_message_text[:50]}...'")
+                                break # از حلقه خارج شو
+                        except Exception as e_inner:
+                            self._log(f"   (خطای جزئی در خواندن متن پیام شماره {i}: {e_inner})")
+                            pass
+
+                if not target_message_text:
+                    self._log(f"⚠️ پیام با پیشوند '{message_prefix}' در گروه '{group_name}' پیدا نشد.")
+                    self.page.screenshot(path='debug_message_not_found.png')
+                    return [] # بازگشت لیست خالی چون پیام پیدا نشد
+
+            except Exception as e_find_msg:
+                self._log(f"❌ خطایی در هنگام جستجوی پیام هدف در گروه '{group_name}' رخ داد: {e_find_msg}")
+                self.page.screenshot(path='debug_find_message_error.png')
+                return []
+
+            # --- مرحله ۳: استخراج منشن‌ها و بازگشت ---
+            self._log("\n--- شروع مرحله ۳: استخراج منشن‌ها ---")
+            if target_message_text:
+                usernames = extract_usernames_from_text(target_message_text)
+                if not usernames:
+                    self._log("⚠️ هیچ نام کاربری (@username) در پیام پیدا نشد.")
+                    return []
+                else:
+                    self._log(f"✅ {len(usernames)} نام کاربری استخراج شد: {', '.join(usernames[:5])}...")
+                    # پاک کردن فیلد جستجو برای آماده‌سازی مراحل بعدی
+                    try:
+                        search_input.click(timeout=3000)
+                        search_input.fill("")
+                        self.page.wait_for_timeout(500)
+                    except:
+                        pass
+                    return usernames
+            else:
+                 # این حالت نباید اتفاق بیفتد چون قبلا کنترل شده
+                self._log("ℹ️ پیام هدف یافت نشد، بنابراین هیچ نام کاربری برای استخراج وجود ندارد.")
+                return []
+
         except Exception as e:
-            self._log(f"❌ خطا در استخراج از گروه: {str(e)}")
+            self._log(f"❌ خطای کلی و غیرمنتظره در تابع extract_mentions_from_group: {e}")
             import traceback
             self._log(f"جزئیات خطا: {traceback.format_exc()}")
-            
-            # عکس بگیریم برای دیباگ
-            try:
-                self.page.screenshot(path="debug_extract_error.png")
-            except:
-                pass
-            
+            if self.page:
+                self.page.screenshot(path='debug_extract_general_error.png')
             return []
             
