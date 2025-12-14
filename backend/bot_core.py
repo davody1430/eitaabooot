@@ -142,31 +142,89 @@ class EitaaBot:
 
     def send_direct_message(self, username, message):
         if not self.is_logged_in:
-            self._log("Cannot send message, not logged in.")
+            self._log(f"❌ عدم امکان ارسال پیام به {username}: کاربر وارد نشده است.")
             return False
         
+        clean_username = username.lstrip('@')
+
         try:
-            self._log(f"Searching for user: {username}")
-            search_box = self.page.locator(self.selectors['search_box'])
-            search_box.fill(username)
-            self._wait_random_delay()
+            self._log(f"--- شروع ارسال پیام به {username} ---")
 
-            self._log(f"Clicking on user '{username}' in chat list.")
-            user_in_list = self.page.locator(f"{self.selectors['chat_list_item']}:has-text('{username.lstrip('@')}')")
-            user_in_list.first.click()
+            # --- مرحله ۱: پاکسازی جستجو و جستجوی کاربر ---
+            try:
+                self._log(f"۱.۱: در حال پیدا کردن و پاک کردن کادر جستجو...")
+                search_box = self.page.locator(self.selectors['search_box'])
+                search_box.wait_for(timeout=10000)
+                search_box.click(timeout=5000)
+                search_box.fill("")
+                self.page.wait_for_timeout(500)
 
-            self._log("Typing message...")
-            message_input = self.page.locator(self.selectors['message_input'])
-            message_input.fill(message)
-            message_input.press('Enter')
+                self._log(f"۱.۲: در حال وارد کردن نام کاربری '{username}'...")
+                search_box.fill(username)
+                self.page.wait_for_timeout(1500) # زمان انتظار برای ظاهر شدن نتایج
+                self._log("۱.۳: نام کاربری با موفقیت وارد شد.")
 
-            self._log(f"Message sent successfully to {username}.")
-            self._wait_random_delay()
+            except Exception as e:
+                self._log(f"❌ خطا در مرحله جستجوی کاربر '{username}': {e}")
+                self.page.screenshot(path=f'error_search_{clean_username}.png')
+                return False
+
+            # --- مرحله ۲: انتخاب دقیق کاربر از لیست نتایج ---
+            try:
+                self._log(f"۲.۱: در حال جستجوی '{clean_username}' در لیست نتایج...")
+                # انتخابگر دقیق‌تر برای پیدا کردن آیتم چت کاربر
+                user_item_selector = f'li.rp.chatlist-chat:has(span.peer-title:has-text("{clean_username}"))'
+                user_chat_element = self.page.locator(user_item_selector).first
+                user_chat_element.wait_for(state='attached', timeout=15000)
+
+                self._log(f"۲.۲: '{clean_username}' در لیست پیدا شد. در حال اسکرول و کلیک...")
+                try:
+                    user_chat_element.scroll_into_view_if_needed(timeout=5000)
+                except Exception as scroll_err:
+                    self._log(f"   (هشدار جزئی) اسکرول به کاربر با خطا مواجه شد: {scroll_err}")
+
+                user_chat_element.wait_for(state='visible', timeout=20000)
+                user_chat_element.click(timeout=10000)
+                self._log(f"۲.۳: با موفقیت روی '{clean_username}' کلیک شد.")
+
+            except PlaywrightTimeoutError:
+                self._log(f"❌ خطا: کاربر '{username}' پس از جستجو در لیست نتایج پیدا نشد (Timeout).")
+                self.page.screenshot(path=f'error_user_not_found_{clean_username}.png')
+                return False
+            except Exception as e:
+                self._log(f"❌ خطا در مرحله انتخاب کاربر '{username}' از لیست: {e}")
+                self.page.screenshot(path=f'error_clicking_user_{clean_username}.png')
+                return False
+
+            # --- مرحله ۳: ارسال پیام ---
+            try:
+                self._log("۳.۱: در حال پیدا کردن کادر ورودی پیام...")
+                # انتخابگر دقیق‌تر برای کادر پیام که ویرایش‌پذیر است و fake نیست
+                dm_message_input_selector = 'div.input-message-input[contenteditable="true"]:not(.input-field-input-fake)'
+                message_input = self.page.locator(dm_message_input_selector)
+                message_input.wait_for(state='visible', timeout=15000)
+
+                self._log("۳.۲: در حال نوشتن پیام...")
+                message_input.fill(message)
+                self.page.wait_for_timeout(500)
+
+                self._log("۳.۳: در حال فشردن کلید Enter برای ارسال...")
+                message_input.press('Enter')
+                self._log(f"✅ پیام با موفقیت برای {username} ارسال شد.")
+                self._wait_random_delay()
+
+            except Exception as e:
+                self._log(f"❌ خطا در مرحله ارسال پیام به '{username}': {e}")
+                self.page.screenshot(path=f'error_sending_message_{clean_username}.png')
+                return False
+
+            self._log(f"--- پایان عملیات ارسال برای {username} ---")
             return True
+
         except Exception as e:
-            self._log(f"ERROR sending message to {username}: {e}")
+            self._log(f"❌ خطای کلی و غیرمنتظره در تابع send_direct_message برای '{username}': {e}")
             if self.page:
-                self.page.screenshot(path=f'send_message_error_{username}.png')
+                self.page.screenshot(path=f'error_general_send_{clean_username}.png')
             return False
             
     def close(self):
